@@ -1,0 +1,7 @@
+{
+  "name": "Notos",
+  "description": "A minimalist social app for sharing short text and audio notes with a focus on aesthetics and poetry.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

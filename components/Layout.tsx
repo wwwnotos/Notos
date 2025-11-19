@@ -1,0 +1,67 @@
+import React from 'react';
+import { Home, Search, PlusSquare, Bell, User } from 'lucide-react';
+import { Screen } from '../types';
+
+interface LayoutProps {
+  children: React.ReactNode;
+  currentScreen: Screen;
+  onNavigate: (screen: Screen) => void;
+  hasUnreadNotifications?: boolean;
+  labels: {
+    home: string;
+    discover: string;
+    activity: string;
+    profile: string;
+  };
+}
+
+const Layout: React.FC<LayoutProps> = ({ children, currentScreen, onNavigate, hasUnreadNotifications, labels }) => {
+  
+  const NavItem = ({ screen, icon: Icon, label }: { screen: Screen; icon: React.ElementType; label: string }) => {
+    const isActive = currentScreen === screen;
+    return (
+      <button 
+        onClick={() => onNavigate(screen)}
+        className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors duration-300 ${isActive ? 'opacity-100 scale-105' : 'opacity-50 hover:opacity-75'}`}
+      >
+        <div className="relative">
+           <Icon size={24} strokeWidth={isActive ? 2.5 : 2} />
+           {screen === Screen.NOTIFICATIONS && hasUnreadNotifications && (
+             <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-black dark:border-white" />
+           )}
+        </div>
+        <span className="text-[10px] font-medium">{label}</span>
+      </button>
+    );
+  };
+
+  return (
+    <div className="flex flex-col h-screen w-full max-w-md mx-auto bg-white shadow-2xl relative overflow-hidden">
+      <main className="flex-1 overflow-y-auto no-scrollbar pb-20 relative">
+        {children}
+      </main>
+
+      {/* Sticky Bottom Nav - Inverted Colors requested by user */}
+      <nav className="absolute bottom-0 left-0 w-full h-16 flex justify-around items-center z-50 pb-safe transition-colors duration-500
+                      bg-black text-white dark:bg-white dark:text-black border-t border-gray-800 dark:border-gray-200">
+        <NavItem screen={Screen.FEED} icon={Home} label={labels.home} />
+        <NavItem screen={Screen.DISCOVER} icon={Search} label={labels.discover} />
+        
+        {/* Floating Action Button for Create - Inverse of the bar */}
+        <button 
+          onClick={() => onNavigate(Screen.CREATE)}
+          className="relative -top-5 p-3.5 rounded-2xl shadow-lg active:scale-95 transition-all duration-300
+                     bg-white text-black shadow-white/20 hover:bg-gray-200
+                     dark:bg-black dark:text-white dark:shadow-black/20 dark:hover:bg-gray-900"
+        >
+          <PlusSquare size={24} />
+        </button>
+
+        <NavItem screen={Screen.NOTIFICATIONS} icon={Bell} label={labels.activity} />
+        <NavItem screen={Screen.PROFILE} icon={User} label={labels.profile} />
+      </nav>
+    </div>
+  );
+};
+
+export default Layout;
