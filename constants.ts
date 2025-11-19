@@ -1,4 +1,5 @@
 
+
 import { Note, NoteColor, NoteType, User, FontStyle, Notification } from './types';
 
 export const COUNTRY_CODES = [
@@ -13,6 +14,13 @@ export const COUNTRY_CODES = [
 // Reordered: For You first, Trending second
 export const INTERESTS = [
   'For You', 'Trending', 'Poetry', 'Music', 'Quotes', 'Art', 'Daily Life', 'Comedy'
+];
+
+// Mixed Arabic and English tags for Discover page fallback
+export const DEFAULT_TRENDING_TAGS = [
+  '#Poetry', '#خواطر', '#Nature', '#تصويري', 
+  '#Coffee', '#السعودية', '#Art', '#اقتباسات',
+  '#Travel', '#كتب', '#Music', '#مساء_الخير'
 ];
 
 export const TRANSLATIONS = {
@@ -32,8 +40,8 @@ export const TRANSLATIONS = {
     post: 'Post',
     placeholder: "What's on your mind?",
     voiceNote: 'Voice Note',
-    polishing: 'Polishing...',
-    polish: 'Polish',
+    polishing: 'Tagging...',
+    polish: 'Auto Tags',
     autoTags: 'Auto Tags',
     home: 'Home',
     discover: 'Discover',
@@ -65,7 +73,24 @@ export const TRANSLATIONS = {
     accounts: 'Accounts',
     tags: 'Tags',
     postsWith: 'Posts with',
-    plain: 'Plain', sun: 'Sun', sky: 'Sky', rose: 'Rose', mystic: 'Mystic', midnight: 'Midnight'
+    plain: 'Plain', sun: 'Sun', sky: 'Sky', rose: 'Rose', mystic: 'Mystic', midnight: 'Midnight',
+    // New Settings Translations
+    personalInfo: 'Personal Information',
+    security: 'Security',
+    notifications: 'Notifications',
+    appearance: 'Appearance',
+    help: 'Help & Support',
+    email: 'Email',
+    privateAccount: 'Private Account',
+    privateDescription: 'When enabled, your posts are only visible to people who follow you.',
+    pushNotifications: 'Push Notifications',
+    notifyLikes: 'Likes',
+    notifyFollows: 'New Followers',
+    notifyPosts: 'Posts from Following',
+    // Auth Validation
+    emailReq: 'Email must be a valid address ending in .com',
+    passReq: 'Password must contain letters, numbers, and symbols',
+    userReq: 'Username must be unique'
   },
   ar: {
     tagline: 'Share your echo',
@@ -83,8 +108,8 @@ export const TRANSLATIONS = {
     post: 'نشر',
     placeholder: 'بماذا تفكر؟',
     voiceNote: 'ملاحظة صوتية',
-    polishing: 'جاري التحسين...',
-    polish: 'تحسين',
+    polishing: 'جاري التوليد...',
+    polish: 'هشتاق تلقائي',
     autoTags: 'وسوم تلقائية',
     home: 'الرئيسية',
     discover: 'اكتشف',
@@ -116,6 +141,23 @@ export const TRANSLATIONS = {
     accounts: 'حسابات',
     tags: 'وسوم',
     postsWith: 'المنشورات في',
-    plain: 'عادي', sun: 'شمس', sky: 'سماء', rose: 'ورد', mystic: 'غموض', midnight: 'ليل'
+    plain: 'عادي', sun: 'شمس', sky: 'سماء', rose: 'ورد', mystic: 'غموض', midnight: 'ليل',
+    // New Settings Translations
+    personalInfo: 'المعلومات الشخصية',
+    security: 'الأمان',
+    notifications: 'الإشعارات',
+    appearance: 'المظهر',
+    help: 'المساعدة والدعم',
+    email: 'البريد الإلكتروني',
+    privateAccount: 'حساب خاص',
+    privateDescription: 'عند التفعيل، ستظهر منشوراتك فقط للأشخاص الذين يتابعونك.',
+    pushNotifications: 'الإشعارات المنبثقة',
+    notifyLikes: 'الإعجابات',
+    notifyFollows: 'متابعين جدد',
+    notifyPosts: 'منشورات من تتابعهم',
+    // Auth Validation
+    emailReq: 'يجب أن يكون البريد الإلكتروني حقيقياً وينتهي بـ .com',
+    passReq: 'كلمة المرور يجب أن تحتوي على أحرف وأرقام ورموز',
+    userReq: 'يجب أن يكون اسم المستخدم فريداً'
   }
 };

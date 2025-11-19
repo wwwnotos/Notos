@@ -28,6 +28,12 @@ export interface Comment {
   timestamp: number;
 }
 
+export interface NotificationSettings {
+  likes: boolean;
+  follows: boolean;
+  newPosts: boolean;
+}
+
 export interface User {
   id: string;
   username: string;
@@ -42,6 +48,8 @@ export interface User {
   followingIds: string[]; // IDs of users this user follows
   bio: string;
   badges: string[];
+  isPrivate: boolean;
+  notificationSettings: NotificationSettings;
 }
 
 export interface Note {

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Home, Search, PlusSquare, Bell, User } from 'lucide-react';
 import { Screen } from '../types';
@@ -6,7 +7,7 @@ interface LayoutProps {
   children: React.ReactNode;
   currentScreen: Screen;
   onNavigate: (screen: Screen) => void;
-  hasUnreadNotifications?: boolean;
+  unreadCount?: number; // Changed from boolean to number
   labels: {
     home: string;
     discover: string;
@@ -15,7 +16,7 @@ interface LayoutProps {
   };
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, currentScreen, onNavigate, hasUnreadNotifications, labels }) => {
+const Layout: React.FC<LayoutProps> = ({ children, currentScreen, onNavigate, unreadCount = 0, labels }) => {
   
   const NavItem = ({ screen, icon: Icon, label }: { screen: Screen; icon: React.ElementType; label: string }) => {
     const isActive = currentScreen === screen;
@@ -26,8 +27,10 @@ const Layout: React.FC<LayoutProps> = ({ children, currentScreen, onNavigate, ha
       >
         <div className="relative">
            <Icon size={24} strokeWidth={isActive ? 2.5 : 2} />
-           {screen === Screen.NOTIFICATIONS && hasUnreadNotifications && (
-             <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-black dark:border-white" />
+           {screen === Screen.NOTIFICATIONS && unreadCount > 0 && (
+             <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full border-2 border-black dark:border-white animate-bounce">
+               {unreadCount > 9 ? '9+' : unreadCount}
+             </span>
            )}
         </div>
         <span className="text-[10px] font-medium">{label}</span>

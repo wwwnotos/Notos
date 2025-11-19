@@ -1,7 +1,8 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
-import { Screen, Note, User, NoteType, FontStyle, NoteColor, Comment } from './types';
-import { INTERESTS, TRANSLATIONS } from './constants';
+import { Screen, Note, User, NoteType, FontStyle, NoteColor, Comment, Notification } from './types';
+import { INTERESTS, TRANSLATIONS, DEFAULT_TRENDING_TAGS } from './constants';
 import { suggestTags } from './services/geminiService';
 import { db } from './services/db';
 
@@ -12,11 +13,13 @@ import {
   ArrowRight, Mic, X, Sparkles, 
   Hash, LogOut, Type, Search, User as UserIcon, 
   ArrowLeft, Settings, Edit, MapPin, Send, Moon, Sun, Heart,
-  Mail, Lock, Key, Check, ChevronRight, Loader2, Camera, Image as ImageIcon, HelpCircle, Shield, Bell
+  Mail, Lock, Key, Check, ChevronRight, Loader2, Camera, Image as ImageIcon, HelpCircle, Shield, Bell, CheckCircle2,
+  Plane, Cpu, Newspaper, Feather, Zap, Globe, Palette, Code, Flame, Smile, Music, Star, ToggleLeft, ToggleRight,
+  UserPlus
 } from 'lucide-react';
 
 // --- Sound Effects Helper ---
-const playSystemSound = (type: 'success' | 'refresh') => {
+const playSystemSound = (type: 'success' | 'refresh' | 'notification') => {
   try {
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContext) return;
@@ -42,10 +45,80 @@ const playSystemSound = (type: 'success' | 'refresh') => {
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
       osc.start();
       osc.stop(ctx.currentTime + 0.1);
+    } else if (type === 'notification') {
+        // Gentle 'pop' sound
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.3);
     }
   } catch (e) {
     console.error('Audio play failed', e);
   }
+};
+
+const AVAILABLE_ICONS = [
+  { id: 'Star', icon: Star, label: 'General' },
+  { id: 'Feather', icon: Feather, label: 'Poetry' },
+  { id: 'Mic', icon: Mic, label: 'Singing' },
+  { id: 'Music', icon: Music, label: 'Music' },
+  { id: 'Plane', icon: Plane, label: 'Travel' },
+  { id: 'Camera', icon: Camera, label: 'Photo' },
+  { id: 'Palette', icon: Palette, label: 'Art' },
+  { id: 'Code', icon: Code, label: 'Tech' },
+  { id: 'Cpu', icon: Cpu, label: 'Hardware' },
+  { id: 'Newspaper', icon: Newspaper, label: 'News' },
+  { id: 'Flame', icon: Flame, label: 'Trending' },
+  { id: 'Zap', icon: Zap, label: 'Idea' },
+  { id: 'Globe', icon: Globe, label: 'World' },
+];
+
+// --- Dynamic Island Component (Refined - Clean & Minimal) ---
+interface DynamicToastProps {
+    message: string;
+    type: 'success' | 'notification';
+    visible: boolean;
+    icon?: React.ReactNode;
+}
+
+const DynamicIsland: React.FC<DynamicToastProps> = ({ message, type, visible, icon }) => {
+    // Refined logic: When invisible, it's a tiny pill (mimicking the physical island size roughly).
+    // When visible, it expands elastically.
+    // Removed fake sensors/cameras for a cleaner look.
+    
+    return (
+        <div 
+            className={`fixed left-1/2 transform -translate-x-1/2 z-[100] bg-black text-white overflow-hidden flex items-center justify-between
+                        shadow-2xl transition-all duration-500 ease-[cubic-bezier(0.175,0.885,0.32,1.275)]
+                        ${visible 
+                            ? 'top-3 w-[92%] max-w-[360px] h-[58px] rounded-[32px] px-1' 
+                            : 'top-3 w-[0px] h-[0px] opacity-0 rounded-full' // Completely hidden when inactive to show underlying notch
+                        }`}
+        >
+            {/* Content - Left (Icon) */}
+            <div className={`pl-4 flex items-center transition-all duration-300 delay-75 ${visible ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4'}`}>
+                <div className="scale-90">
+                    {icon || (type === 'success' ? <CheckCircle2 size={22} className="text-green-400" /> : <Bell size={22} className="text-rose-400" />)}
+                </div>
+            </div>
+
+            {/* Content - Right (Message) */}
+            <div className={`flex-1 text-center px-2 transition-all duration-300 delay-75 ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+                 <span className="text-sm font-semibold truncate block leading-tight tracking-tight">{message}</span>
+            </div>
+            
+            {/* Content - Far Right (Sound Visualizer) */}
+            <div className={`pr-4 flex items-center justify-end transition-all duration-300 delay-75 ${visible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-4'}`}>
+                 <div className="flex gap-[3px] items-center h-3">
+                     <div className="w-[3px] bg-white/80 rounded-full animate-[pulse_0.8s_ease-in-out_infinite] h-2"></div>
+                     <div className="w-[3px] bg-white/80 rounded-full animate-[pulse_1.0s_ease-in-out_infinite_0.1s] h-4"></div>
+                     <div className="w-[3px] bg-white/80 rounded-full animate-[pulse_0.6s_ease-in-out_infinite_0.2s] h-2.5"></div>
+                 </div>
+            </div>
+        </div>
+    );
 };
 
 // --- Reusable Pull To Refresh Component ---
@@ -92,7 +165,7 @@ const PullRefreshWrapper: React.FC<PullRefreshWrapperProps> = ({ children, onRef
 
   return (
     <div 
-      className="min-h-full transition-transform duration-200"
+      className="min-h-full transition-transform duration-300 ease-out"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -119,14 +192,13 @@ const SplashScreen = ({ onFinish }: { onFinish: () => void }) => {
 
   return (
     <div className="h-screen w-full bg-black text-white flex flex-col items-center justify-center relative overflow-hidden">
-      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-20"></div>
       <h1 className="text-5xl font-bold tracking-wider animate-fade-in mb-2 font-sans">Notos</h1>
       <p className="text-xs font-mono tracking-widest uppercase opacity-60 animate-slide-up">Share your echo</p>
     </div>
   );
 };
 
-// Updated Auth Screen - Email/Pass/User Sequence
+// Updated Auth Screen - Adjusted Top Spacing & Validation
 const AuthScreen = ({ onLogin, t }: { onLogin: (email: string, username: string) => void, t: any }) => {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1); // 1: Email, 2: Pass, 3: User, 4: OTP
   const [email, setEmail] = useState('');
@@ -152,8 +224,14 @@ const AuthScreen = ({ onLogin, t }: { onLogin: (email: string, username: string)
     }, 1000);
   };
 
+  // Validation Logic
+  const emailValid = email.includes('@') && email.endsWith('.com');
+  const passValid = password.length >= 6 && /[a-zA-Z]/.test(password) && /\d/.test(password) && /[^a-zA-Z0-9]/.test(password);
+  const userValid = username.length >= 3;
+
   return (
-    <div className="h-screen w-full max-w-md mx-auto bg-white dark:bg-black p-8 flex flex-col justify-center transition-colors duration-500">
+    <div className="h-screen w-full max-w-md mx-auto bg-white dark:bg-black px-8 flex flex-col justify-start transition-colors duration-500 pt-32"> 
+      
       <div className="mb-10 animate-fade-in">
         <h2 className="text-4xl font-bold mb-3 dark:text-white tracking-tight">{t.welcome}</h2>
         <p className="text-gray-400 dark:text-gray-500 text-sm font-medium">
@@ -164,7 +242,7 @@ const AuthScreen = ({ onLogin, t }: { onLogin: (email: string, username: string)
         </p>
       </div>
 
-      <div className="flex-1 flex flex-col justify-start pt-10">
+      <div className="flex-1 flex flex-col justify-start pt-4">
         {step === 1 && (
           <div className="animate-slide-up w-full">
             <div className="relative group">
@@ -178,9 +256,10 @@ const AuthScreen = ({ onLogin, t }: { onLogin: (email: string, username: string)
                  autoFocus
                />
             </div>
-            <button onClick={nextStep} disabled={!email.includes('@')} className="mt-8 w-full bg-black dark:bg-white text-white dark:text-black py-4 rounded-2xl font-bold shadow-lg disabled:opacity-30 active:scale-95 transition-all">
+            <button onClick={nextStep} disabled={!emailValid} className="mt-8 w-full bg-black dark:bg-white text-white dark:text-black py-4 rounded-2xl font-bold shadow-lg disabled:opacity-30 active:scale-95 transition-all">
                {isLoading ? <Loader2 className="mx-auto animate-spin" /> : t.continue}
             </button>
+            <p className="mt-4 text-xs text-center text-gray-400">{t.emailReq}</p>
           </div>
         )}
 
@@ -197,9 +276,10 @@ const AuthScreen = ({ onLogin, t }: { onLogin: (email: string, username: string)
                  autoFocus
                />
             </div>
-            <button onClick={nextStep} disabled={password.length < 6} className="mt-8 w-full bg-black dark:bg-white text-white dark:text-black py-4 rounded-2xl font-bold shadow-lg disabled:opacity-30 active:scale-95 transition-all">
+            <button onClick={nextStep} disabled={!passValid} className="mt-8 w-full bg-black dark:bg-white text-white dark:text-black py-4 rounded-2xl font-bold shadow-lg disabled:opacity-30 active:scale-95 transition-all">
                {isLoading ? <Loader2 className="mx-auto animate-spin" /> : t.continue}
             </button>
+            <p className="mt-4 text-xs text-center text-gray-400">{t.passReq}</p>
           </div>
         )}
 
@@ -216,9 +296,10 @@ const AuthScreen = ({ onLogin, t }: { onLogin: (email: string, username: string)
                  autoFocus
                />
             </div>
-            <button onClick={nextStep} disabled={username.length < 3} className="mt-8 w-full bg-black dark:bg-white text-white dark:text-black py-4 rounded-2xl font-bold shadow-lg disabled:opacity-30 active:scale-95 transition-all">
+            <button onClick={nextStep} disabled={!userValid} className="mt-8 w-full bg-black dark:bg-white text-white dark:text-black py-4 rounded-2xl font-bold shadow-lg disabled:opacity-30 active:scale-95 transition-all">
                {isLoading ? <Loader2 className="mx-auto animate-spin" /> : t.continue}
             </button>
+            <p className="mt-4 text-xs text-center text-gray-400">{t.userReq}</p>
           </div>
         )}
 
@@ -268,7 +349,7 @@ export default function App() {
   // Data State (Now loaded from DB)
   const [users, setUsers] = useState<User[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   
   // UI State
   const [darkMode, setDarkMode] = useState(false);
@@ -276,7 +357,13 @@ export default function App() {
   const [activeInterest, setActiveInterest] = useState<string>(INTERESTS[0]);
   const [searchQuery, setSearchQuery] = useState('');
   const [profileActiveTab, setProfileActiveTab] = useState<'NOTES' | 'LIKES'>('NOTES');
+  const [settingsView, setSettingsView] = useState<'MAIN' | 'PERSONAL' | 'SECURITY' | 'NOTIFICATIONS'>('MAIN');
   
+  // Toast / Dynamic Island State
+  const [toast, setToast] = useState<{ message: string, type: 'success' | 'notification', visible: boolean, icon?: React.ReactNode }>({
+      message: '', type: 'success', visible: false
+  });
+
   // Modals & Sub-views
   const [viewingUserId, setViewingUserId] = useState<string | null>(null);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -299,34 +386,169 @@ export default function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [activeStyle, setActiveStyle] = useState({ font: FontStyle.SANS, color: NoteColor.WHITE, icon: 'Star' });
   const [isPolishing, setIsPolishing] = useState(false);
+  const [isIconPickerOpen, setIsIconPickerOpen] = useState(false);
 
   // Audio Recording Refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<any>(null);
+  const typingIntervalRef = useRef<any>(null);
 
   const t = TRANSLATIONS[lang];
+  
+  // Derived State
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  // Cleanup interval on unmount
+  useEffect(() => {
+      return () => {
+          if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
+      }
+  }, []);
+
+  const showToast = (message: string, type: 'success' | 'notification' = 'success', icon?: React.ReactNode) => {
+      setToast({ message, type, visible: true, icon });
+      // Play appropriate sound
+      playSystemSound(type === 'success' ? 'success' : 'notification');
+      
+      setTimeout(() => {
+          setToast(prev => ({ ...prev, visible: false }));
+      }, 3000);
+  };
+
+  // External Notification Helper
+  const sendExternalNotification = (title: string, body: string) => {
+      if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
+          new Notification(title, { body, icon: '/icon.png' });
+      }
+  };
+
+  // Data Fetching
+  const refreshData = async (specificUser?: User) => {
+      const allUsers = await db.getAllUsers();
+      const allNotes = await db.getNotes();
+      
+      // Resolve file URLs for audio notes if necessary
+      const processedNotes = await Promise.all(allNotes.map(async (n) => {
+          if (n.type === NoteType.AUDIO && n.audioUrl && !n.audioUrl.startsWith('blob') && !n.audioUrl.startsWith('http')) {
+             const resolved = await db.getFileUrl(n.audioUrl);
+             return { ...n, audioUrl: resolved || undefined };
+          }
+          return n;
+      }));
+      
+      // Resolve avatar/cover URLs
+      const processedUsers = await Promise.all(allUsers.map(async (u) => {
+           let av = u.avatarUrl;
+           let cv = u.coverUrl;
+           if (!av.startsWith('http')) { const r = await db.getFileUrl(av); if(r) av = r; }
+           if (!cv.startsWith('http')) { const r = await db.getFileUrl(cv); if(r) cv = r; }
+           return { ...u, avatarUrl: av, coverUrl: cv };
+      }));
+
+      setUsers(processedUsers);
+      setNotes(processedNotes);
+
+      const userForNotifs = specificUser || currentUser;
+      if (userForNotifs) {
+          const notifs = await db.getNotifications(userForNotifs.id);
+          setNotifications(notifs);
+      }
+  };
+
+  // --- Simulate Offline Activity ---
+  const simulateOfflineActivity = async (user: User) => {
+      // Logic: If user hasn't been here for a while (simulated by just checking if we have < 2 unread), add fake engagement
+      const existingUnread = await db.getNotifications(user.id);
+      
+      if (existingUnread.filter(n => !n.read).length === 0) {
+          // Create a fake notification to simulate "While you were away"
+          const fakeUser = users.find(u => u.id !== user.id) || users[0]; // Pick someone else
+          if (!fakeUser) return;
+
+          const activityType = Math.random() > 0.5 ? 'LIKE' : 'FOLLOW';
+          
+          const fakeNotif: Notification = {
+              id: Date.now().toString(),
+              type: activityType as any,
+              fromUser: fakeUser,
+              noteId: activityType === 'LIKE' ? notes[0]?.id : undefined,
+              timestamp: Date.now(),
+              read: false
+          };
+
+          // We need to bypass normal flow and inject directly to simulate external event
+          // Note: In a real app, this comes from backend. Here we append to DB.
+          await db.createNotification(fakeNotif);
+          
+          // Refresh to show the count
+          const updatedNotifs = await db.getNotifications(user.id);
+          setNotifications(updatedNotifs);
+          
+          // Show toast on entry for this activity
+          const msg = activityType === 'LIKE' ? `${fakeUser.displayName} liked your note` : `${fakeUser.displayName} followed you`;
+          setTimeout(() => showToast(msg, 'notification'), 800);
+      }
+  };
 
   // --- Initial Load ---
   useEffect(() => {
     const initApp = async () => {
+        // Request Notification Permission
+        if ('Notification' in window) {
+            Notification.requestPermission();
+        }
+
         const userLang = navigator.language.split('-')[0];
         setLang(userLang === 'ar' ? 'ar' : 'en');
+        // Force LTR strictly as requested
         document.documentElement.dir = 'ltr';
+
+        // Simulated splash delay
+        await new Promise(resolve => setTimeout(resolve, 2000));
 
         // Check if user is already logged in
         const loggedUser = await db.getCurrentUser();
         if (loggedUser) {
             setCurrentUser(loggedUser);
             setScreen(Screen.FEED);
+            await refreshData(loggedUser);
+            
+            // Simulate fetching data that happened while away
+            setTimeout(() => simulateOfflineActivity(loggedUser), 1000);
+
+        } else {
+            setScreen(Screen.AUTH);
+            refreshData();
         }
-        
-        refreshData();
     };
     
-    // Allow splash screen to run a bit
-    setTimeout(initApp, 500);
+    initApp();
   }, []);
+
+  // --- Periodic Simulation (External Notification) ---
+  useEffect(() => {
+      // Randomly trigger a "notification" from outside if the app is open but idle
+      const interval = setInterval(() => {
+          if (currentUser && Math.random() > 0.9) { // Low chance every check
+              // Create a visual toast notification to show the Dynamic Island feature
+              const msgs = [
+                  "Sara liked your poem",
+                  "Ahmed started following you",
+                  "New trending topic: #Midnight"
+              ];
+              const msg = msgs[Math.floor(Math.random() * msgs.length)];
+              // Only show if we are NOT on notifications screen
+              if (screen !== Screen.NOTIFICATIONS) {
+                  showToast(msg, 'notification', <Bell size={18} className="text-white"/>);
+                  sendExternalNotification("Notos", msg);
+              }
+          }
+      }, 30000); // Check every 30 seconds
+
+      return () => clearInterval(interval);
+  }, [currentUser, screen]);
+
 
   // Toggle Dark Mode class on HTML
   useEffect(() => {
@@ -339,40 +561,22 @@ export default function App() {
 
   const toggleTheme = () => setDarkMode(!darkMode);
 
-  // Data Fetching
-  const refreshData = async () => {
-      const allUsers = await db.getAllUsers();
-      const allNotes = await db.getNotes();
-      // Resolve file URLs for audio notes if necessary
-      const processedNotes = await Promise.all(allNotes.map(async (n) => {
-          if (n.type === NoteType.AUDIO && n.audioUrl && !n.audioUrl.startsWith('blob') && !n.audioUrl.startsWith('http')) {
-             const resolved = await db.getFileUrl(n.audioUrl);
-             return { ...n, audioUrl: resolved || undefined };
-          }
-          return n;
-      }));
-      
-      // Resolve avatar/cover URLs if they are stored as blob IDs
-      const processedUsers = await Promise.all(allUsers.map(async (u) => {
-           let av = u.avatarUrl;
-           let cv = u.coverUrl;
-           if (!av.startsWith('http')) { const r = await db.getFileUrl(av); if(r) av = r; }
-           if (!cv.startsWith('http')) { const r = await db.getFileUrl(cv); if(r) cv = r; }
-           return { ...u, avatarUrl: av, coverUrl: cv };
-      }));
-
-      setUsers(processedUsers);
-      setNotes(processedNotes);
-
-      if (currentUser) {
-          const notifs = await db.getNotifications(currentUser.id);
-          setNotifications(notifs);
-      }
-  };
-
   // Navigation Handlers
-  const handleNavigate = (s: Screen) => {
+  const handleNavigate = async (s: Screen) => {
+    // If going to notifications, mark all as read
+    if (s === Screen.NOTIFICATIONS && currentUser) {
+        // Optimistically update local state
+        const updated = notifications.map(n => ({ ...n, read: true }));
+        setNotifications(updated);
+        
+        // Update DB
+        const dbNotifs = await db.getNotifications(currentUser.id);
+        dbNotifs.forEach(n => n.read = true);
+        localStorage.setItem('notos_notifications', JSON.stringify(await db.getAllNotificationsRaw())); 
+    }
+
     setScreen(s);
+    setSettingsView('MAIN'); // Reset settings view
     setViewingUserId(null); 
     setFollowListType(null);
     setProfileActiveTab('NOTES');
@@ -398,8 +602,9 @@ export default function App() {
   const handleLogin = async (email: string, username: string) => {
     const user = await db.login(email, username);
     setCurrentUser(user);
-    refreshData();
+    await refreshData(user);
     setScreen(Screen.FEED);
+    setTimeout(() => simulateOfflineActivity(user), 1000);
   };
 
   const handleLogout = async () => {
@@ -414,10 +619,15 @@ export default function App() {
     // Optimistic UI update
     setNotes(prev => prev.map(n => {
         if (n.id === noteId) {
+            const liked = !n.isLikedByCurrentUser;
+            if (liked) {
+                 // Trigger Toast for 'Liked'
+                 // showToast('Liked', 'success', <Heart size={18} fill="currentColor" className="text-red-500" />);
+            }
             return {
                 ...n,
-                likes: n.isLikedByCurrentUser ? n.likes - 1 : n.likes + 1,
-                isLikedByCurrentUser: !n.isLikedByCurrentUser
+                likes: liked ? n.likes + 1 : n.likes - 1,
+                isLikedByCurrentUser: liked
             };
         }
         return n;
@@ -429,6 +639,11 @@ export default function App() {
       
       const { currentUser: updatedCurrent, targetUser: updatedTarget } = await db.toggleFollow(currentUser.id, targetUserId);
       
+      // Check if we followed (added to array)
+      if (updatedCurrent.followingIds.includes(targetUserId)) {
+          showToast(`Following ${updatedTarget.displayName}`, 'success');
+      }
+
       setCurrentUser(updatedCurrent);
       setUsers(prev => prev.map(u => {
           if (u.id === updatedCurrent.id) return updatedCurrent;
@@ -464,6 +679,7 @@ export default function App() {
     }));
     setCommentInput('');
     setActiveCommentNoteId(null); 
+    showToast('Comment posted', 'success');
   };
 
   const handleCreateNote = async () => {
@@ -506,16 +722,40 @@ export default function App() {
     setNewNoteAudioUrl(null);
     setNewNoteDuration(0);
     
-    playSystemSound('success');
+    // Show Dynamic Island Notification
+    showToast('Note Published', 'success');
+    
     setScreen(Screen.FEED);
   };
 
   const handleAISuggestTags = async () => {
     if (!newNoteContent) return;
     setIsPolishing(true);
+    
+    // Fetch suggestions
     const tags = await suggestTags(newNoteContent);
-    setNewNoteContent(prev => `${prev}\n\n${tags.join(' ')}`);
-    setIsPolishing(false);
+    
+    if (tags.length > 0) {
+        const tagsString = "\n\n" + tags.join(' ');
+        
+        // Typewriter effect: append character by character
+        let i = 0;
+        // Clear existing
+        if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
+
+        typingIntervalRef.current = setInterval(() => {
+            const char = tagsString.charAt(i);
+            setNewNoteContent(prev => prev + char);
+            i++;
+            
+            if (i >= tagsString.length) {
+                if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
+                setIsPolishing(false);
+            }
+        }, 30); // Speed of typing
+    } else {
+        setIsPolishing(false);
+    }
   };
 
   // Actual MediaRecorder Implementation
@@ -610,7 +850,15 @@ export default function App() {
       setCurrentUser(updated);
       await refreshData();
       setIsEditingProfile(false);
+      showToast('Profile Saved', 'success');
     }
+  };
+
+  const updateSettings = async (updates: Partial<User>) => {
+      if (!currentUser) return;
+      const updated = await db.updateUser(currentUser.id, updates);
+      setCurrentUser(updated);
+      // refreshData(); // Not strictly needed for local UI toggle speed
   };
 
   const handleRefresh = () => {
@@ -640,8 +888,12 @@ export default function App() {
        tagCounts[t] = (tagCounts[t] || 0) + 1;
     }));
     const topTags = Object.entries(tagCounts).sort((a,b) => b[1] - a[1]).slice(0, 6).map(e => e[0]);
+    
+    // Mix default trending tags if not enough user tags
+    const mixedTags = [...new Set([...topTags, ...DEFAULT_TRENDING_TAGS])].slice(0, 6);
+    
     const creators = [...users].filter(u => u.id !== currentUser?.id).slice(0, 3);
-    return { topTags, creators };
+    return { topTags: mixedTags, creators };
   };
 
   const getSearchResults = () => {
@@ -655,38 +907,60 @@ export default function App() {
   // --- Render Screen Content ---
 
   const renderContent = () => {
-    if (screen === Screen.SPLASH) return <SplashScreen onFinish={() => {}} />; // Finish handled in useEffect
+    if (screen === Screen.SPLASH) return <SplashScreen onFinish={() => {}} />; 
     if (screen === Screen.AUTH) return <AuthScreen onLogin={handleLogin} t={t} />;
     
     if (screen === Screen.CREATE) {
         const isDarkBg = activeStyle.color.includes('slate') || activeStyle.color.includes('black') || activeStyle.color.includes('text-white');
         const textColor = isDarkBg ? 'text-white' : 'text-gray-900 dark:text-white';
-        const placeholderColor = isDarkBg ? 'placeholder-gray-300' : 'placeholder-gray-400';
+        const placeholderColor = isDarkBg ? 'placeholder-gray-400' : 'placeholder-gray-300';
 
         return (
-          <div className="h-full flex flex-col bg-white dark:bg-black transition-colors duration-300">
-            <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-white/10 z-10 bg-inherit">
-              <button onClick={() => setScreen(Screen.FEED)} className="dark:text-white"><X size={24} /></button>
-              <span className="font-bold text-lg dark:text-white">{t.newNote}</span>
+          <div className="relative h-full flex flex-col bg-white dark:bg-black transition-colors duration-300">
+            {/* Minimalist Header */}
+            <div className="absolute top-6 left-0 right-0 px-6 z-20 flex justify-between items-center">
               <button 
-                onClick={handleCreateNote}
-                className="text-indigo-600 dark:text-indigo-400 font-bold disabled:opacity-50"
-                disabled={!newNoteContent && !newNoteAudioBlob}
+                onClick={() => setScreen(Screen.FEED)} 
+                className="p-2.5 bg-gray-100 dark:bg-zinc-800 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors shadow-sm"
               >
-                {t.post}
+                 <X size={20} className="dark:text-white opacity-70"/>
               </button>
+
+              <div className="flex gap-3">
+                 <button 
+                    onClick={handleAISuggestTags}
+                    disabled={isPolishing || !newNoteContent}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-gray-100 dark:bg-zinc-800 rounded-full font-bold text-sm text-gray-600 dark:text-gray-300 shadow-sm hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors"
+                  >
+                    {isPolishing ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} fill="currentColor" className="opacity-50"/>}
+                    <span>{t.polish}</span>
+                 </button>
+
+                 <button 
+                    onClick={handleCreateNote}
+                    className="px-6 py-2.5 bg-black dark:bg-white text-white dark:text-black rounded-full font-bold text-sm shadow-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+                    disabled={!newNoteContent && !newNoteAudioBlob}
+                 >
+                    {t.post}
+                 </button>
+              </div>
             </div>
             
-            <div className={`flex-1 p-6 transition-all duration-500 flex flex-col ${activeStyle.color}`}>
-              <textarea
-                placeholder={t.placeholder}
-                className={`w-full h-64 bg-transparent resize-none outline-none text-2xl ${placeholderColor} ${activeStyle.font} ${textColor}`}
-                value={newNoteContent}
-                onChange={e => setNewNoteContent(e.target.value)}
-              />
+            <div className={`flex-1 flex flex-col ${activeStyle.color} transition-colors duration-500`}>
+              {/* Main Text Area - Centered and Large */}
+              <div className="relative flex-1 flex items-center">
+                <textarea
+                  placeholder={t.placeholder}
+                  className={`w-full h-full px-8 pt-32 pb-40 bg-transparent resize-none outline-none text-3xl leading-relaxed font-serif placeholder-opacity-40 ${textColor} ${activeStyle.font}`}
+                  value={newNoteContent}
+                  onChange={e => setNewNoteContent(e.target.value)}
+                  disabled={isPolishing} 
+                />
+              </div>
 
+              {/* Audio Preview (Floating if exists) */}
               {newNoteAudioUrl && (
-                 <div className="mt-4 mb-4 p-4 bg-white/20 rounded-2xl border border-black/5 backdrop-blur-md">
+                 <div className="absolute bottom-40 left-6 right-6 p-4 bg-white/20 rounded-2xl border border-black/5 backdrop-blur-md shadow-sm">
                     <div className="flex justify-between items-center mb-2">
                         <span className="text-xs font-bold uppercase tracking-wider opacity-50">{t.voiceNote}</span>
                         <button onClick={() => { setNewNoteAudioBlob(null); setNewNoteAudioUrl(null); setNewNoteDuration(0); }}><X size={14}/></button>
@@ -694,20 +968,34 @@ export default function App() {
                     <AudioPlayer duration={newNoteDuration} src={newNoteAudioUrl} colorClass={isDarkBg ? 'text-white' : 'text-black'} />
                  </div>
               )}
-              
-              <div className="mt-auto space-y-4">
-                <div className="flex gap-2 overflow-x-auto py-2 no-scrollbar">
-                   <button 
-                     onClick={handleAISuggestTags}
-                     disabled={isPolishing || !newNoteContent}
-                     className="flex items-center gap-2 px-3 py-1.5 bg-white/30 backdrop-blur-sm rounded-full text-xs font-bold shadow-sm"
-                   >
-                     <Hash size={12} /> {t.autoTags}
-                   </button>
-                   {isRecording && <span className="text-red-500 font-mono animate-pulse flex items-center">Recording... {newNoteDuration}s</span>}
+
+              {/* Bottom Controls: Toolbar & Colors */}
+              <div className="absolute bottom-0 left-0 right-0 p-6 flex flex-col gap-6 bg-gradient-to-t from-white/10 to-transparent pb-8">
+                
+                {/* Tools Row: Mic, Icon */}
+                {/* Removed Font Change Button */}
+                <div className="flex justify-center items-center gap-6">
+                     <button 
+                        onClick={toggleRecording}
+                        className={`p-3 rounded-full transition-all shadow-sm hover:scale-105 active:scale-95
+                                   ${isRecording ? 'bg-red-500 text-white animate-pulse shadow-red-200' : 'bg-white dark:bg-zinc-800 text-black dark:text-white'}`}
+                     >
+                        <Mic size={22} />
+                     </button>
+
+                     <button 
+                        onClick={() => setIsIconPickerOpen(true)}
+                        className="p-3 rounded-full bg-white dark:bg-zinc-800 text-black dark:text-white shadow-sm hover:scale-105 transition-transform"
+                     >
+                        {(() => {
+                            const Icon = AVAILABLE_ICONS.find(i => i.id === activeStyle.icon)?.icon || Star;
+                            return <Icon size={22} />;
+                        })()}
+                     </button>
                 </div>
 
-                <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
+                {/* Color Palette Row (Minimalist Circles) */}
+                <div className="flex justify-center gap-4">
                    {[
                      { color: NoteColor.WHITE, label: t.plain },
                      { color: NoteColor.YELLOW, label: t.sun },
@@ -719,23 +1007,36 @@ export default function App() {
                      <button
                        key={style.label}
                        onClick={() => setActiveStyle({ ...activeStyle, color: style.color })}
-                       className={`min-w-[36px] h-9 rounded-full border-2 shadow-sm ${style.color.replace('text-white', '')} ${activeStyle.color === style.color ? 'border-black dark:border-white scale-110' : 'border-transparent'}`}
+                       className={`w-8 h-8 rounded-full transition-transform duration-300 shadow-sm
+                                  ${style.color.replace('text-white', '')} 
+                                  ${activeStyle.color === style.color ? 'scale-125 shadow-md ring-2 ring-offset-2 ring-black dark:ring-white dark:ring-offset-black' : 'opacity-80 hover:opacity-100 hover:scale-110'}`}
                      />
                    ))}
                 </div>
-                
-                <div className="flex justify-between items-center pt-4 border-t border-black/5 dark:border-white/10">
-                   <button 
-                      onClick={toggleRecording}
-                      className={`p-4 rounded-full transition-colors shadow-lg active:scale-95 ${isRecording ? 'bg-red-500 text-white animate-pulse' : 'bg-white dark:bg-zinc-800 text-black dark:text-white'}`}
-                   >
-                     <Mic size={24} />
-                   </button>
-                   <div className="flex gap-4 text-gray-400">
-                     <button onClick={() => setActiveStyle({...activeStyle, font: FontStyle.SERIF})} className={`p-2 rounded-lg ${activeStyle.font === FontStyle.SERIF ? 'bg-black/10 dark:bg-white/10 text-black dark:text-white' : ''}`}><Type size={24} /></button>
-                   </div>
-                </div>
               </div>
+
+              {/* Icon Picker Overlay */}
+              {isIconPickerOpen && (
+                  <div className="absolute inset-x-0 bottom-0 bg-white dark:bg-zinc-900 rounded-t-3xl z-50 p-6 shadow-2xl animate-slide-up border-t border-gray-100 dark:border-zinc-800 h-[400px] flex flex-col">
+                      <div className="flex justify-between items-center mb-4 shrink-0">
+                        <h3 className="font-bold dark:text-white">Select Icon</h3>
+                        <button onClick={() => setIsIconPickerOpen(false)}><X className="dark:text-white"/></button>
+                      </div>
+                      <div className="grid grid-cols-4 gap-3 overflow-y-auto pb-4 no-scrollbar">
+                        {AVAILABLE_ICONS.map((item) => (
+                            <button 
+                              key={item.id}
+                              onClick={() => { setActiveStyle({...activeStyle, icon: item.id}); setIsIconPickerOpen(false); }}
+                              className={`flex flex-col items-center gap-2 p-3 rounded-xl transition-all
+                                          ${activeStyle.icon === item.id ? 'bg-black text-white dark:bg-white dark:text-black scale-105 shadow-md' : 'bg-gray-50 dark:bg-zinc-800 dark:text-white hover:bg-gray-100 dark:hover:bg-zinc-700'}`}
+                            >
+                              <item.icon size={24} />
+                              <span className="text-[10px] font-bold uppercase tracking-wider opacity-60">{item.label}</span>
+                            </button>
+                        ))}
+                      </div>
+                  </div>
+              )}
             </div>
           </div>
         );
@@ -745,7 +1046,7 @@ export default function App() {
     const commonProps = {
         currentScreen: screen,
         onNavigate: handleNavigate,
-        hasUnreadNotifications: notifications.filter(n => !n.read).length > 0,
+        unreadCount: unreadCount, // Pass the numeric count
         labels: { home: t.home, discover: t.discover, activity: t.activity, profile: t.profile }
     };
 
@@ -753,7 +1054,7 @@ export default function App() {
         const filteredNotes = getFilteredNotes();
         return (
           <Layout {...commonProps}>
-             <div className="bg-gray-50 dark:bg-black min-h-full transition-colors duration-300">
+             <div className="bg-gray-50 dark:bg-black min-h-full transition-colors duration-300 pt-14">
                <PullRefreshWrapper onRefresh={handleRefresh} isDark={darkMode}>
                   <div className="pt-4 pb-6 px-4">
                      {/* Header */}
@@ -769,7 +1070,7 @@ export default function App() {
                          <button 
                            key={interest} 
                            onClick={() => setActiveInterest(interest)}
-                           className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all duration-300 ${activeInterest === interest ? 'bg-black text-white dark:bg-white dark:text-black shadow-md scale-105' : 'bg-white dark:bg-zinc-900 text-gray-600 dark:text-gray-400 shadow-sm border border-gray-100 dark:border-zinc-800'}`}
+                           className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all duration-300 ${activeInterest === interest ? 'bg-black text-white dark:bg-white dark:text-black shadow-md scale-105' : 'bg-white dark:bg-zinc-900 text-gray-600 dark:text-gray-400 shadow-sm border border-gray-100 dark:border-zinc-800'}`}
                          >
                            {interest}
                          </button>
@@ -806,10 +1107,11 @@ export default function App() {
 
         return (
           <Layout {...commonProps}>
-            <div className="bg-gray-50 dark:bg-black min-h-full transition-colors duration-300">
+            <div className="bg-gray-50 dark:bg-black min-h-full transition-colors duration-300 pt-12">
               <PullRefreshWrapper onRefresh={handleRefresh} isDark={darkMode}>
                 <div className="p-4 pb-24">
-                    <div className="relative mb-6 sticky top-0 z-10 pt-2 bg-gray-50/90 dark:bg-black/90 backdrop-blur-md pb-2">
+                    {/* Added explicit margin top to search bar */}
+                    <div className="relative mb-6 sticky top-2 z-10 bg-gray-50/90 dark:bg-black/90 backdrop-blur-md pb-2 rounded-b-xl">
                         <input 
                         type="text" 
                         placeholder={t.searchPlaceholder}
@@ -817,7 +1119,7 @@ export default function App() {
                         onChange={e => setSearchQuery(e.target.value)}
                         className="w-full bg-white dark:bg-zinc-900 dark:text-white rounded-2xl py-3.5 pl-11 pr-4 shadow-sm focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition-shadow"
                         />
-                        <div className="absolute top-6 left-4 text-gray-400">
+                        <div className="absolute top-3.5 left-4 text-gray-400">
                             <Search size={20} />
                         </div>
                     </div>
@@ -923,9 +1225,133 @@ export default function App() {
     }
 
     if (screen === Screen.SETTINGS) {
+        const backToMain = () => setSettingsView('MAIN');
+
+        // Render Sub-Views
+        if (settingsView === 'PERSONAL' && currentUser) {
+            return (
+                <Layout {...commonProps}>
+                    <div className="min-h-full bg-white dark:bg-black animate-slide-up pt-12">
+                        <div className="p-4 flex items-center gap-4 border-b border-gray-100 dark:border-zinc-800">
+                            <button onClick={backToMain} className="dark:text-white"><ArrowLeft /></button>
+                            <h2 className="text-xl font-bold dark:text-white">{t.personalInfo}</h2>
+                        </div>
+                        <div className="p-4 space-y-6">
+                             <div className="space-y-4">
+                                 <div className="bg-gray-50 dark:bg-zinc-900 rounded-xl p-4">
+                                     <p className="text-xs text-gray-400 uppercase font-bold mb-1">{t.name}</p>
+                                     <p className="text-lg font-medium dark:text-white">{currentUser.displayName}</p>
+                                 </div>
+                                 <div className="bg-gray-50 dark:bg-zinc-900 rounded-xl p-4">
+                                     <p className="text-xs text-gray-400 uppercase font-bold mb-1">{t.username}</p>
+                                     <p className="text-lg font-medium dark:text-white">@{currentUser.username}</p>
+                                 </div>
+                                 <div className="bg-gray-50 dark:bg-zinc-900 rounded-xl p-4">
+                                     <p className="text-xs text-gray-400 uppercase font-bold mb-1">{t.email}</p>
+                                     <p className="text-lg font-medium dark:text-white">{currentUser.email}</p>
+                                 </div>
+                                 <div className="bg-gray-50 dark:bg-zinc-900 rounded-xl p-4">
+                                     <p className="text-xs text-gray-400 uppercase font-bold mb-1">{t.bio}</p>
+                                     <p className="text-base dark:text-white">{currentUser.bio}</p>
+                                 </div>
+                             </div>
+                             <button 
+                                onClick={() => { setScreen(Screen.PROFILE); openEditProfile(); }}
+                                className="w-full py-3 bg-black dark:bg-white text-white dark:text-black rounded-xl font-bold"
+                             >
+                                 {t.editProfile}
+                             </button>
+                        </div>
+                    </div>
+                </Layout>
+            );
+        }
+
+        if (settingsView === 'SECURITY' && currentUser) {
+            return (
+                <Layout {...commonProps}>
+                    <div className="min-h-full bg-white dark:bg-black animate-slide-up pt-12">
+                        <div className="p-4 flex items-center gap-4 border-b border-gray-100 dark:border-zinc-800">
+                            <button onClick={backToMain} className="dark:text-white"><ArrowLeft /></button>
+                            <h2 className="text-xl font-bold dark:text-white">{t.security}</h2>
+                        </div>
+                        <div className="p-4 space-y-6">
+                            <div className="bg-gray-50 dark:bg-zinc-900 rounded-xl p-4 flex items-center justify-between">
+                                <div>
+                                    <h3 className="font-bold text-lg dark:text-white mb-1">{t.privateAccount}</h3>
+                                    <p className="text-sm text-gray-500 max-w-[250px] leading-snug">{t.privateDescription}</p>
+                                </div>
+                                <button 
+                                    onClick={() => updateSettings({ isPrivate: !currentUser.isPrivate })}
+                                    className={`transition-colors ${currentUser.isPrivate ? 'text-green-500' : 'text-gray-300'}`}
+                                >
+                                    {currentUser.isPrivate ? <ToggleRight size={48} fill="currentColor" /> : <ToggleLeft size={48} />}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </Layout>
+            );
+        }
+
+        if (settingsView === 'NOTIFICATIONS' && currentUser) {
+            const toggleNotif = (key: keyof typeof currentUser.notificationSettings) => {
+                const newSettings = { ...currentUser.notificationSettings, [key]: !currentUser.notificationSettings[key] };
+                updateSettings({ notificationSettings: newSettings });
+            };
+
+            return (
+                <Layout {...commonProps}>
+                    <div className="min-h-full bg-white dark:bg-black animate-slide-up pt-12">
+                        <div className="p-4 flex items-center gap-4 border-b border-gray-100 dark:border-zinc-800">
+                            <button onClick={backToMain} className="dark:text-white"><ArrowLeft /></button>
+                            <h2 className="text-xl font-bold dark:text-white">{t.notifications}</h2>
+                        </div>
+                        <div className="p-4 space-y-4">
+                             <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">{t.pushNotifications}</h3>
+                             
+                             {/* Likes - Monochrome Icon */}
+                             <div className="bg-gray-50 dark:bg-zinc-900 rounded-xl p-4 flex items-center justify-between">
+                                 <div className="flex items-center gap-3">
+                                     <div className="p-2 bg-transparent border border-gray-200 dark:border-zinc-800 text-black dark:text-white rounded-full"><Heart size={18}/></div>
+                                     <span className="font-bold dark:text-white">{t.notifyLikes}</span>
+                                 </div>
+                                 <button onClick={() => toggleNotif('likes')} className={`transition-colors ${currentUser.notificationSettings.likes ? 'text-green-500' : 'text-gray-300'}`}>
+                                     {currentUser.notificationSettings.likes ? <ToggleRight size={40} fill="currentColor"/> : <ToggleLeft size={40}/>}
+                                 </button>
+                             </div>
+
+                             {/* Follows - Monochrome Icon */}
+                             <div className="bg-gray-50 dark:bg-zinc-900 rounded-xl p-4 flex items-center justify-between">
+                                 <div className="flex items-center gap-3">
+                                     <div className="p-2 bg-transparent border border-gray-200 dark:border-zinc-800 text-black dark:text-white rounded-full"><UserPlus size={18}/></div>
+                                     <span className="font-bold dark:text-white">{t.notifyFollows}</span>
+                                 </div>
+                                 <button onClick={() => toggleNotif('follows')} className={`transition-colors ${currentUser.notificationSettings.follows ? 'text-green-500' : 'text-gray-300'}`}>
+                                     {currentUser.notificationSettings.follows ? <ToggleRight size={40} fill="currentColor"/> : <ToggleLeft size={40}/>}
+                                 </button>
+                             </div>
+
+                             {/* New Posts - Monochrome Icon */}
+                             <div className="bg-gray-50 dark:bg-zinc-900 rounded-xl p-4 flex items-center justify-between">
+                                 <div className="flex items-center gap-3">
+                                     <div className="p-2 bg-transparent border border-gray-200 dark:border-zinc-800 text-black dark:text-white rounded-full"><Bell size={18}/></div>
+                                     <span className="font-bold dark:text-white">{t.notifyPosts}</span>
+                                 </div>
+                                 <button onClick={() => toggleNotif('newPosts')} className={`transition-colors ${currentUser.notificationSettings.newPosts ? 'text-green-500' : 'text-gray-300'}`}>
+                                     {currentUser.notificationSettings.newPosts ? <ToggleRight size={40} fill="currentColor"/> : <ToggleLeft size={40}/>}
+                                 </button>
+                             </div>
+                        </div>
+                    </div>
+                </Layout>
+            );
+        }
+
+        // Main Settings View
         return (
             <Layout {...commonProps}>
-                <div className="min-h-full bg-white dark:bg-black animate-slide-up">
+                <div className="min-h-full bg-white dark:bg-black animate-slide-up pt-12">
                     <div className="p-4 flex items-center gap-4 border-b border-gray-100 dark:border-zinc-800">
                         <button onClick={() => setScreen(Screen.PROFILE)} className="dark:text-white"><ArrowLeft /></button>
                         <h2 className="text-xl font-bold dark:text-white">{t.settings}</h2>
@@ -934,13 +1360,13 @@ export default function App() {
                         <div className="space-y-1">
                              <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">Account</h3>
                              <div className="bg-gray-50 dark:bg-zinc-900 rounded-xl overflow-hidden">
-                                 <button className="w-full p-4 text-left flex justify-between items-center hover:bg-gray-100 dark:hover:bg-zinc-800 dark:text-white">
-                                     <div className="flex items-center gap-3"><UserIcon size={20}/> Personal Information</div>
+                                 <button onClick={() => setSettingsView('PERSONAL')} className="w-full p-4 text-left flex justify-between items-center hover:bg-gray-100 dark:hover:bg-zinc-800 dark:text-white transition-colors">
+                                     <div className="flex items-center gap-3"><UserIcon size={20}/> {t.personalInfo}</div>
                                      <ChevronRight size={16} className="text-gray-400"/>
                                  </button>
                                  <div className="h-px bg-gray-200 dark:bg-zinc-800 w-full"></div>
-                                 <button className="w-full p-4 text-left flex justify-between items-center hover:bg-gray-100 dark:hover:bg-zinc-800 dark:text-white">
-                                     <div className="flex items-center gap-3"><Shield size={20}/> Security</div>
+                                 <button onClick={() => setSettingsView('SECURITY')} className="w-full p-4 text-left flex justify-between items-center hover:bg-gray-100 dark:hover:bg-zinc-800 dark:text-white transition-colors">
+                                     <div className="flex items-center gap-3"><Shield size={20}/> {t.security}</div>
                                      <ChevronRight size={16} className="text-gray-400"/>
                                  </button>
                              </div>
@@ -949,18 +1375,18 @@ export default function App() {
                         <div className="space-y-1">
                              <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">App</h3>
                              <div className="bg-gray-50 dark:bg-zinc-900 rounded-xl overflow-hidden">
-                                 <button className="w-full p-4 text-left flex justify-between items-center hover:bg-gray-100 dark:hover:bg-zinc-800 dark:text-white">
-                                     <div className="flex items-center gap-3"><Bell size={20}/> Notifications</div>
+                                 <button onClick={() => setSettingsView('NOTIFICATIONS')} className="w-full p-4 text-left flex justify-between items-center hover:bg-gray-100 dark:hover:bg-zinc-800 dark:text-white transition-colors">
+                                     <div className="flex items-center gap-3"><Bell size={20}/> {t.notifications}</div>
                                      <ChevronRight size={16} className="text-gray-400"/>
                                  </button>
                                  <div className="h-px bg-gray-200 dark:bg-zinc-800 w-full"></div>
-                                 <button onClick={toggleTheme} className="w-full p-4 text-left flex justify-between items-center hover:bg-gray-100 dark:hover:bg-zinc-800 dark:text-white">
-                                     <div className="flex items-center gap-3">{darkMode ? <Sun size={20}/> : <Moon size={20}/>} Appearance</div>
+                                 <button onClick={toggleTheme} className="w-full p-4 text-left flex justify-between items-center hover:bg-gray-100 dark:hover:bg-zinc-800 dark:text-white transition-colors">
+                                     <div className="flex items-center gap-3">{darkMode ? <Sun size={20}/> : <Moon size={20}/>} {t.appearance}</div>
                                      <span className="text-xs text-gray-400">{darkMode ? 'Dark' : 'Light'}</span>
                                  </button>
                                  <div className="h-px bg-gray-200 dark:bg-zinc-800 w-full"></div>
-                                 <button className="w-full p-4 text-left flex justify-between items-center hover:bg-gray-100 dark:hover:bg-zinc-800 dark:text-white">
-                                     <div className="flex items-center gap-3"><HelpCircle size={20}/> Help & Support</div>
+                                 <button className="w-full p-4 text-left flex justify-between items-center hover:bg-gray-100 dark:hover:bg-zinc-800 dark:text-white transition-colors">
+                                     <div className="flex items-center gap-3"><HelpCircle size={20}/> {t.help}</div>
                                      <ChevronRight size={16} className="text-gray-400"/>
                                  </button>
                              </div>
@@ -972,7 +1398,7 @@ export default function App() {
                         >
                             <LogOut size={20} /> {t.logout}
                         </button>
-                        <div className="text-center text-xs text-gray-300 mt-4">Version 1.0.2 (iOS)</div>
+                        <div className="text-center text-xs text-gray-300 mt-4">Version 1.0.5</div>
                     </div>
                 </div>
             </Layout>
@@ -983,7 +1409,7 @@ export default function App() {
         const tagNotes = notes.filter(n => n.tags.includes((selectedTag as string) || ''));
         return (
             <Layout {...commonProps}>
-                <div className="bg-gray-50 dark:bg-black min-h-full transition-colors duration-300">
+                <div className="bg-gray-50 dark:bg-black min-h-full transition-colors duration-300 pt-12">
                     <div className="sticky top-0 z-10 bg-white/80 dark:bg-black/80 backdrop-blur-md p-4 flex items-center gap-3 border-b border-gray-100 dark:border-zinc-800">
                         <button onClick={() => setScreen(Screen.DISCOVER)} className="dark:text-white"><ArrowLeft /></button>
                         <div>
@@ -1010,32 +1436,51 @@ export default function App() {
     if (screen === Screen.NOTIFICATIONS) {
         return (
             <Layout {...commonProps}>
-             <div className="bg-gray-50 dark:bg-black min-h-full transition-colors duration-300">
+             <div className="bg-gray-50 dark:bg-black min-h-full transition-colors duration-300 pt-14">
                <PullRefreshWrapper onRefresh={handleRefresh} isDark={darkMode}>
                  <div className="p-4 pb-24">
-                    <h2 className="text-3xl font-bold mb-6 dark:text-white tracking-tight">{t.activity}</h2>
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-3xl font-bold dark:text-white tracking-tight">{t.activity}</h2>
+                        <button 
+                            className="text-xs font-bold text-gray-400 hover:text-black dark:hover:text-white"
+                            onClick={() => setNotifications(notifications.map(n => ({ ...n, read: true })))}
+                        >
+                            Mark all read
+                        </button>
+                    </div>
+                    
                     <div className="space-y-4">
                         {notifications.map(notif => (
                         <div 
                             key={notif.id} 
                             onClick={() => handleUserClick(notif.fromUser.id)}
-                            className="flex gap-4 items-center p-4 rounded-2xl bg-white dark:bg-zinc-900 shadow-sm cursor-pointer border border-gray-50 dark:border-zinc-800"
+                            className={`flex gap-4 items-center p-4 rounded-2xl shadow-sm cursor-pointer border border-gray-50 dark:border-zinc-800 relative overflow-hidden transition-all active:scale-98
+                                       ${!notif.read ? 'bg-blue-50 dark:bg-blue-900/10' : 'bg-white dark:bg-zinc-900'}`}
                         >
-                            <div className={`p-3 rounded-full shrink-0 ${notif.type === 'LIKE' ? 'bg-rose-100 text-rose-500 dark:bg-rose-900/30' : 'bg-blue-100 text-blue-500 dark:bg-blue-900/30'}`}>
-                                {notif.type === 'LIKE' ? <HeartIcon size={18} /> : <UserIcon size={18} />}
+                            {!notif.read && <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500"></div>}
+                            
+                            {/* Monochrome Notification Icons */}
+                            <div className="p-3 rounded-full shrink-0 bg-transparent border border-gray-200 dark:border-zinc-800 text-black dark:text-white">
+                                {notif.type === 'LIKE' ? <Heart size={18} fill="currentColor"/> : <UserPlus size={18} />}
                             </div>
                             <div className="flex-1">
                                 <p className="text-sm dark:text-white leading-snug">
                                 <span className="font-bold">{notif.fromUser.displayName}</span>
                                 {notif.type === 'LIKE' ? ` ${t.liked}` : ` ${t.startedFollowing}`}
                                 </p>
-                                <p className="text-xs text-gray-400 mt-1 font-medium">2h ago</p>
+                                <p className="text-xs text-gray-400 mt-1 font-medium">Just now</p>
                             </div>
                             {notif.type === 'FOLLOW' && (
                                 <button className="px-3 py-1 bg-black dark:bg-white text-white dark:text-black text-xs font-bold rounded-full">Follow</button>
                             )}
                         </div>
                         ))}
+                        {notifications.length === 0 && (
+                            <div className="text-center py-10 text-gray-400">
+                                <Bell size={48} className="mx-auto mb-4 opacity-20" />
+                                <p>No new activity.</p>
+                            </div>
+                        )}
                     </div>
                  </div>
                </PullRefreshWrapper>
@@ -1063,14 +1508,14 @@ export default function App() {
                     {/* Cover Image */}
                     <div className="relative h-48 bg-gray-900 overflow-hidden">
                         <img src={targetUser.coverUrl} className="w-full h-full object-cover opacity-80 hover:opacity-100 transition-opacity duration-500" alt="cover"/>
-                        <div className="absolute top-4 left-4 z-10">
+                        <div className="absolute top-12 left-4 z-10">
                             {!isSelf && (
                                 <button onClick={() => setScreen(Screen.FEED)} className="p-2 bg-white/20 backdrop-blur text-white rounded-full hover:bg-white/30 transition-colors">
                                     <ArrowLeft size={20} />
                                 </button>
                             )}
                         </div>
-                        <div className="absolute top-4 right-4 z-10 flex gap-2">
+                        <div className="absolute top-12 right-4 z-10 flex gap-2">
                                 {isSelf && (
                                     <button 
                                         onClick={() => setScreen(Screen.SETTINGS)}
@@ -1165,7 +1610,7 @@ export default function App() {
         const list = followListType === 'FOLLOWERS' ? users : users.slice(0, 2); // Simplification for demo logic
         return (
             <Layout {...commonProps}>
-                <div className="bg-white dark:bg-black min-h-full p-4 transition-colors duration-300">
+                <div className="bg-white dark:bg-black min-h-full p-4 transition-colors duration-300 pt-14">
                     <div className="flex items-center gap-4 mb-6">
                         <button onClick={() => setScreen(Screen.PROFILE)} className="dark:text-white"><ArrowLeft /></button>
                         <h2 className="text-xl font-bold dark:text-white">{followListType === 'FOLLOWERS' ? t.followers : t.following}</h2>
@@ -1204,6 +1649,10 @@ export default function App() {
   return (
     <div className="h-full w-full bg-gray-200 dark:bg-gray-900 flex justify-center font-sans">
       <div className="w-full max-w-md h-full max-h-[900px] bg-white dark:bg-black shadow-2xl relative overflow-hidden sm:rounded-[3rem] sm:my-auto sm:h-[95vh] border-4 border-black dark:border-zinc-800">
+        
+        {/* Dynamic Island Notification */}
+        <DynamicIsland message={toast.message} type={toast.type} visible={toast.visible} icon={toast.icon} />
+
         {renderContent()}
 
         {/* Comment Modal Overlay */}
@@ -1243,7 +1692,7 @@ export default function App() {
 
         {/* Edit Profile Modal Overlay */}
         {isEditingProfile && (
-            <div className="absolute inset-0 bg-white dark:bg-black z-[60] animate-slide-up flex flex-col">
+            <div className="absolute inset-0 bg-white dark:bg-black z-[60] animate-slide-up flex flex-col pt-12">
                 <div className="flex justify-between items-center p-4 border-b border-gray-100 dark:border-zinc-800">
                     <button onClick={() => setIsEditingProfile(false)} className="dark:text-white">{t.cancel}</button>
                     <h2 className="font-bold text-lg dark:text-white">{t.editProfile}</h2>
@@ -1334,9 +1783,3 @@ export default function App() {
     </div>
   );
 }
-
-const HeartIcon = ({ size }: { size: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" stroke="none">
-    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-  </svg>
-);

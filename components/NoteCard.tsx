@@ -1,5 +1,5 @@
-import React from 'react';
-import { Heart, Share2, MessageCircle, Music, Type, Moon, Coffee, Sun, Star, Play } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Heart, Share2, MessageCircle, Music, Type, Moon, Coffee, Sun, Star, Play, Plane, Cpu, Newspaper, Feather, Mic, Zap, Globe, Camera, Palette, Code, Flame, Smile } from 'lucide-react';
 import { Note, NoteType } from '../types';
 import AudioPlayer from './AudioPlayer';
 
@@ -16,11 +16,39 @@ const ICON_MAP: Record<string, React.ElementType> = {
   'Moon': Moon,
   'Coffee': Coffee,
   'Sun': Sun,
-  'Star': Star
+  'Star': Star,
+  'Plane': Plane,
+  'Cpu': Cpu,
+  'Newspaper': Newspaper,
+  'Feather': Feather,
+  'Mic': Mic,
+  'Zap': Zap,
+  'Globe': Globe,
+  'Camera': Camera,
+  'Palette': Palette,
+  'Code': Code,
+  'Flame': Flame,
+  'Smile': Smile
 };
 
 const NoteCard: React.FC<NoteCardProps> = ({ note, onLike, onComment, onUserClick }) => {
   const Icon = note.style.icon ? ICON_MAP[note.style.icon] : null;
+  
+  // Animation state to prevent initial pop on load
+  const [isAnimating, setIsAnimating] = useState(false);
+  const isMounted = useRef(false);
+
+  useEffect(() => {
+    if (isMounted.current) {
+        if (note.isLikedByCurrentUser) {
+            setIsAnimating(true);
+            const timer = setTimeout(() => setIsAnimating(false), 400); // Match animation duration
+            return () => clearTimeout(timer);
+        }
+    } else {
+        isMounted.current = true;
+    }
+  }, [note.isLikedByCurrentUser]);
 
   return (
     <div className={`relative w-full rounded-3xl p-6 mb-4 transition-all shadow-sm hover:shadow-md ${note.style.color} ${note.style.font} dark:border dark:border-white/10`}>
@@ -77,12 +105,16 @@ const NoteCard: React.FC<NoteCardProps> = ({ note, onLike, onComment, onUserClic
               e.stopPropagation();
               onLike(note.id);
             }}
-            className="flex items-center gap-1.5 text-sm font-medium transition-colors group"
+            className="flex items-center gap-1.5 text-sm font-medium transition-transform active:scale-90 group"
           >
             <Heart 
               size={20} 
               fill={note.isLikedByCurrentUser ? "currentColor" : "none"} 
-              className={`transition-all duration-300 ${note.isLikedByCurrentUser ? 'text-red-500 animate-heart-pop' : 'text-black/60 dark:text-white/60 group-hover:text-red-500'}`}
+              className={`transition-colors duration-300 ${
+                  note.isLikedByCurrentUser 
+                    ? 'text-red-500' 
+                    : 'text-black/60 dark:text-white/60 group-hover:text-red-500'
+                } ${isAnimating ? 'animate-heart-pop' : ''}`}
             />
             <span className="dark:text-white/80">{note.likes}</span>
           </button>
