@@ -26,6 +26,9 @@ export interface Comment {
   userId: string;
   text: string;
   timestamp: number;
+  likes: number;
+  isLikedByCurrentUser: boolean;
+  parentId?: string;
 }
 
 export interface NotificationSettings {
@@ -77,6 +80,7 @@ export interface Notification {
   type: 'LIKE' | 'FOLLOW' | 'MENTION';
   fromUser: User;
   noteId?: string;
+  commentId?: string;
   timestamp: number;
   read: boolean;
 }

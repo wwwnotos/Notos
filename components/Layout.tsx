@@ -7,7 +7,7 @@ interface LayoutProps {
   children: React.ReactNode;
   currentScreen: Screen;
   onNavigate: (screen: Screen) => void;
-  unreadCount?: number; // Changed from boolean to number
+  unreadCount?: number; 
   labels: {
     home: string;
     discover: string;
@@ -39,18 +39,18 @@ const Layout: React.FC<LayoutProps> = ({ children, currentScreen, onNavigate, un
   };
 
   return (
-    <div className="flex flex-col h-screen w-full max-w-md mx-auto bg-white shadow-2xl relative overflow-hidden">
-      <main className="flex-1 overflow-y-auto no-scrollbar pb-20 relative">
+    <div className="flex flex-col h-full w-full mx-auto bg-white dark:bg-black shadow-2xl relative overflow-hidden transition-colors duration-300">
+      <main className="flex-1 overflow-y-auto no-scrollbar relative flex flex-col">
         {children}
       </main>
 
-      {/* Sticky Bottom Nav - Inverted Colors requested by user */}
-      <nav className="absolute bottom-0 left-0 w-full h-16 flex justify-around items-center z-50 pb-safe transition-colors duration-500
+      {/* Sticky Bottom Nav - Static Flex Item for better stability on tablets/different viewports */}
+      <nav className="w-full h-16 flex-shrink-0 flex justify-around items-center z-50 pb-safe transition-colors duration-500
                       bg-black text-white dark:bg-white dark:text-black border-t border-gray-800 dark:border-gray-200">
         <NavItem screen={Screen.FEED} icon={Home} label={labels.home} />
         <NavItem screen={Screen.DISCOVER} icon={Search} label={labels.discover} />
         
-        {/* Floating Action Button for Create - Inverse of the bar */}
+        {/* Floating Action Button for Create - Visual overlap handled by negative margin */}
         <button 
           onClick={() => onNavigate(Screen.CREATE)}
           className="relative -top-5 p-3.5 rounded-2xl shadow-lg active:scale-95 transition-all duration-300

@@ -1,14 +1,14 @@
 
-
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Screen, Note, User, NoteType, FontStyle, NoteColor, Comment, Notification } from './types';
-import { INTERESTS, TRANSLATIONS, DEFAULT_TRENDING_TAGS } from './constants';
+import { TRANSLATIONS, DEFAULT_TRENDING_TAGS } from './constants';
 import { suggestTags } from './services/geminiService';
 import { db } from './services/db';
 
 import Layout from './components/Layout';
 import NoteCard from './components/NoteCard';
 import AudioPlayer from './components/AudioPlayer';
+import CommentsModal from './components/CommentsModal';
 import { 
   ArrowRight, Mic, X, Sparkles, 
   Hash, LogOut, Type, Search, User as UserIcon, 
@@ -86,7 +86,6 @@ interface DynamicToastProps {
 const DynamicIsland: React.FC<DynamicToastProps> = ({ message, type, visible, icon }) => {
     // Refined logic: When invisible, it's a tiny pill (mimicking the physical island size roughly).
     // When visible, it expands elastically.
-    // Removed fake sensors/cameras for a cleaner look.
     
     return (
         <div 
@@ -94,7 +93,7 @@ const DynamicIsland: React.FC<DynamicToastProps> = ({ message, type, visible, ic
                         shadow-2xl transition-all duration-500 ease-[cubic-bezier(0.175,0.885,0.32,1.275)]
                         ${visible 
                             ? 'top-3 w-[92%] max-w-[360px] h-[58px] rounded-[32px] px-1' 
-                            : 'top-3 w-[0px] h-[0px] opacity-0 rounded-full' // Completely hidden when inactive to show underlying notch
+                            : 'top-3 w-[0px] h-[0px] opacity-0 rounded-full' // Completely hidden when inactive
                         }`}
         >
             {/* Content - Left (Icon) */}
@@ -354,7 +353,11 @@ export default function App() {
   // UI State
   const [darkMode, setDarkMode] = useState(false);
   const [lang, setLang] = useState<'en' | 'ar'>('en');
-  const [activeInterest, setActiveInterest] = useState<string>(INTERESTS[0]);
+  const t = TRANSLATIONS[lang];
+
+  // Dynamic Category State
+  const [activeInterest, setActiveInterest] = useState<string>(''); // initialized in useEffect
+
   const [searchQuery, setSearchQuery] = useState('');
   const [profileActiveTab, setProfileActiveTab] = useState<'NOTES' | 'LIKES'>('NOTES');
   const [settingsView, setSettingsView] = useState<'MAIN' | 'PERSONAL' | 'SECURITY' | 'NOTIFICATIONS'>('MAIN');
@@ -368,7 +371,6 @@ export default function App() {
   const [viewingUserId, setViewingUserId] = useState<string | null>(null);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [activeCommentNoteId, setActiveCommentNoteId] = useState<string | null>(null);
-  const [commentInput, setCommentInput] = useState('');
   const [followListType, setFollowListType] = useState<'FOLLOWERS' | 'FOLLOWING' | null>(null);
   
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
@@ -393,11 +395,35 @@ export default function App() {
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<any>(null);
   const typingIntervalRef = useRef<any>(null);
-
-  const t = TRANSLATIONS[lang];
   
   // Derived State
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  // Set initial interest
+  useEffect(() => {
+      setActiveInterest(t.forYou);
+  }, [t.forYou]);
+
+  // --- Calculate Dynamic Categories ---
+  const categories = useMemo(() => {
+    const tagCounts: Record<string, number> = {};
+    notes.forEach(n => n.tags.forEach(tag => {
+        tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+    }));
+    
+    const topTags = Object.entries(tagCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5) // Take top 5
+        .map(e => e[0]);
+
+    return [
+        t.forYou,
+        t.trendingCat,
+        t.voice,
+        ...topTags
+    ];
+  }, [notes, t]);
+
 
   // Cleanup interval on unmount
   useEffect(() => {
@@ -478,7 +504,6 @@ export default function App() {
           };
 
           // We need to bypass normal flow and inject directly to simulate external event
-          // Note: In a real app, this comes from backend. Here we append to DB.
           await db.createNotification(fakeNotif);
           
           // Refresh to show the count
@@ -620,10 +645,6 @@ export default function App() {
     setNotes(prev => prev.map(n => {
         if (n.id === noteId) {
             const liked = !n.isLikedByCurrentUser;
-            if (liked) {
-                 // Trigger Toast for 'Liked'
-                 // showToast('Liked', 'success', <Heart size={18} fill="currentColor" className="text-red-500" />);
-            }
             return {
                 ...n,
                 likes: liked ? n.likes + 1 : n.likes - 1,
@@ -656,14 +677,36 @@ export default function App() {
     setActiveCommentNoteId(noteId);
   };
 
-  const submitComment = async () => {
-    if (!activeCommentNoteId || !commentInput.trim() || !currentUser) return;
+  const handleLikeComment = async (commentId: string) => {
+      if(!currentUser || !activeCommentNoteId) return;
+      await db.toggleCommentLike(activeCommentNoteId, commentId, currentUser.id);
+      // Optimistic update
+      setNotes(prev => prev.map(n => {
+          if (n.id === activeCommentNoteId) {
+              const updatedComments = n.comments.map(c => {
+                  if (c.id === commentId) {
+                      const liked = !c.isLikedByCurrentUser;
+                      return { ...c, isLikedByCurrentUser: liked, likes: liked ? (c.likes||0) + 1 : Math.max(0, (c.likes||0) - 1) };
+                  }
+                  return c;
+              });
+              return { ...n, comments: updatedComments };
+          }
+          return n;
+      }));
+  };
+
+  const submitComment = async (text: string, parentId?: string) => {
+    if (!activeCommentNoteId || !currentUser) return;
     
     const newComment: Comment = {
         id: Date.now().toString(),
         userId: currentUser.id,
-        text: commentInput,
-        timestamp: Date.now()
+        text: text,
+        timestamp: Date.now(),
+        likes: 0,
+        isLikedByCurrentUser: false,
+        parentId: parentId
     };
 
     await db.addComment(activeCommentNoteId, newComment);
@@ -677,9 +720,7 @@ export default function App() {
       }
       return n;
     }));
-    setCommentInput('');
-    setActiveCommentNoteId(null); 
-    showToast('Comment posted', 'success');
+    showToast(parentId ? 'Reply sent' : 'Comment posted', 'success');
   };
 
   const handleCreateNote = async () => {
@@ -688,7 +729,9 @@ export default function App() {
 
     let tags: string[] = [];
     if (newNoteContent.trim()) {
-       tags = newNoteContent.match(/#[a-z0-9_]+/gi) || [];
+       // Updated regex to support Arabic and other unicode characters
+       // Matches # followed by letters (Unicode), numbers, or underscores
+       tags = newNoteContent.match(/#[\p{L}\p{N}_]+/gu) || [];
     }
 
     let audioFileId = undefined;
@@ -858,7 +901,6 @@ export default function App() {
       if (!currentUser) return;
       const updated = await db.updateUser(currentUser.id, updates);
       setCurrentUser(updated);
-      // refreshData(); // Not strictly needed for local UI toggle speed
   };
 
   const handleRefresh = () => {
@@ -868,15 +910,18 @@ export default function App() {
   // Filtering Logic
   const getFilteredNotes = () => {
     let filtered = notes;
-    if (activeInterest === 'For You' || activeInterest === 'الرئيسية') {
+    if (activeInterest === t.forYou) {
       filtered = [...notes].sort((a, b) => b.timestamp - a.timestamp);
-    } else if (activeInterest === 'Trending' || activeInterest === 'الأكثر تداولاً') {
+    } else if (activeInterest === t.trendingCat) {
        filtered = [...notes].sort((a, b) => b.likes - a.likes);
+    } else if (activeInterest === t.voice) {
+       filtered = notes.filter(n => n.type === NoteType.AUDIO);
     } else {
-       const keyword = (activeInterest as string).toLowerCase();
+       // Hashtag Filtering
+       const keyword = activeInterest.toLowerCase();
        filtered = notes.filter(n => 
-         n.tags.some((tag: string) => tag.toLowerCase().includes(keyword)) ||
-         (n.content as string).toLowerCase().includes(keyword)
+         n.tags.some((tag: string) => tag.toLowerCase() === keyword) ||
+         n.content.toLowerCase().includes(keyword)
        );
     }
     return filtered;
@@ -890,7 +935,7 @@ export default function App() {
     const topTags = Object.entries(tagCounts).sort((a,b) => b[1] - a[1]).slice(0, 6).map(e => e[0]);
     
     // Mix default trending tags if not enough user tags
-    const mixedTags = [...new Set([...topTags, ...DEFAULT_TRENDING_TAGS])].slice(0, 6);
+    const mixedTags = [...new Set([...topTags, ...DEFAULT_TRENDING_TAGS])].slice(0, 12);
     
     const creators = [...users].filter(u => u.id !== currentUser?.id).slice(0, 3);
     return { topTags: mixedTags, creators };
@@ -973,7 +1018,6 @@ export default function App() {
               <div className="absolute bottom-0 left-0 right-0 p-6 flex flex-col gap-6 bg-gradient-to-t from-white/10 to-transparent pb-8">
                 
                 {/* Tools Row: Mic, Icon */}
-                {/* Removed Font Change Button */}
                 <div className="flex justify-center items-center gap-6">
                      <button 
                         onClick={toggleRecording}
@@ -1046,7 +1090,7 @@ export default function App() {
     const commonProps = {
         currentScreen: screen,
         onNavigate: handleNavigate,
-        unreadCount: unreadCount, // Pass the numeric count
+        unreadCount: unreadCount,
         labels: { home: t.home, discover: t.discover, activity: t.activity, profile: t.profile }
     };
 
@@ -1059,18 +1103,18 @@ export default function App() {
                   <div className="pt-4 pb-6 px-4">
                      {/* Header */}
                      <div className="flex justify-between items-center mb-6">
-                       <button onClick={() => setActiveInterest('For You')} className="text-2xl font-bold dark:text-white">Notos</button>
+                       <button onClick={() => setActiveInterest(t.forYou)} className="text-2xl font-bold dark:text-white">Notos</button>
                        <button onClick={toggleTheme} className="p-2 rounded-full bg-white dark:bg-zinc-800 shadow-sm hover:scale-110 transition-transform">
                           {darkMode ? <Sun size={20} className="text-white" /> : <Moon size={20} />}
                        </button>
                      </div>
 
-                     <div className="flex gap-2 overflow-x-auto no-scrollbar mb-6">
-                       {INTERESTS.map((interest) => (
+                     <div className="flex gap-3 overflow-x-auto no-scrollbar mb-6 py-2 px-1">
+                       {categories.map((interest) => (
                          <button 
                            key={interest} 
                            onClick={() => setActiveInterest(interest)}
-                           className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all duration-300 ${activeInterest === interest ? 'bg-black text-white dark:bg-white dark:text-black shadow-md scale-105' : 'bg-white dark:bg-zinc-900 text-gray-600 dark:text-gray-400 shadow-sm border border-gray-100 dark:border-zinc-800'}`}
+                           className={`px-3 py-1.5 rounded-full text-sm font-bold whitespace-nowrap flex-shrink-0 transition-all duration-300 ${activeInterest === interest ? 'bg-black text-white dark:bg-white dark:text-black shadow-md scale-105' : 'bg-white dark:bg-zinc-900 text-gray-600 dark:text-gray-400 shadow-sm border border-gray-100 dark:border-zinc-800'}`}
                          >
                            {interest}
                          </button>
@@ -1090,6 +1134,7 @@ export default function App() {
                                 onLike={handleLike} 
                                 onComment={handleComment}
                                 onUserClick={handleUserClick}
+                                onTagClick={handleTagClick}
                                 />
                             ))}
                         </div>
@@ -1110,7 +1155,6 @@ export default function App() {
             <div className="bg-gray-50 dark:bg-black min-h-full transition-colors duration-300 pt-12">
               <PullRefreshWrapper onRefresh={handleRefresh} isDark={darkMode}>
                 <div className="p-4 pb-24">
-                    {/* Added explicit margin top to search bar */}
                     <div className="relative mb-6 sticky top-2 z-10 bg-gray-50/90 dark:bg-black/90 backdrop-blur-md pb-2 rounded-b-xl">
                         <input 
                         type="text" 
@@ -1175,10 +1219,10 @@ export default function App() {
                         <div className="animate-slide-up">
                             <div className="mb-8">
                                 <h3 className="font-bold mb-3 text-lg dark:text-white">{t.trending}</h3>
-                                <div className="grid grid-cols-2 gap-3">
-                                {topTags.map(tag => (
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                {topTags.map((tag, i) => (
                                     <button 
-                                    key={tag as string} 
+                                    key={`${tag}-${i}`} 
                                     onClick={() => handleTagClick(tag as string)}
                                     className="bg-white dark:bg-zinc-900 p-4 rounded-2xl text-black dark:text-white font-bold text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors shadow-sm border border-gray-100 dark:border-zinc-800"
                                     >
@@ -1425,6 +1469,7 @@ export default function App() {
                                 onLike={handleLike} 
                                 onComment={handleComment}
                                 onUserClick={handleUserClick}
+                                onTagClick={handleTagClick}
                              />
                         ))}
                     </div>
@@ -1597,6 +1642,7 @@ export default function App() {
                             onLike={handleLike} 
                             onComment={handleComment}
                             onUserClick={handleUserClick}
+                            onTagClick={handleTagClick}
                         />
                     ))}
                     </div>
@@ -1648,7 +1694,8 @@ export default function App() {
 
   return (
     <div className="h-full w-full bg-gray-200 dark:bg-gray-900 flex justify-center font-sans">
-      <div className="w-full max-w-md h-full max-h-[900px] bg-white dark:bg-black shadow-2xl relative overflow-hidden sm:rounded-[3rem] sm:my-auto sm:h-[95vh] border-4 border-black dark:border-zinc-800">
+      {/* Responsive Container: Full width on mobile, max-w-xl on tablet/desktop (increased width for tablet) */}
+      <div className="w-full md:max-w-xl lg:max-w-2xl h-full md:h-[95dvh] md:max-h-[1200px] bg-white dark:bg-black shadow-2xl relative overflow-hidden md:rounded-[2.5rem] md:my-auto md:border-4 border-black dark:border-zinc-800">
         
         {/* Dynamic Island Notification */}
         <DynamicIsland message={toast.message} type={toast.type} visible={toast.visible} icon={toast.icon} />
@@ -1656,38 +1703,16 @@ export default function App() {
         {renderContent()}
 
         {/* Comment Modal Overlay */}
-        {activeCommentNoteId && (
-          <div className="absolute inset-0 bg-black/50 z-[60] flex items-end backdrop-blur-sm" onClick={() => setActiveCommentNoteId(null)}>
-            <div 
-               className="bg-white dark:bg-zinc-900 w-full rounded-t-3xl p-6 animate-slide-up shadow-2xl"
-               onClick={e => e.stopPropagation()}
-            >
-               <div className="flex justify-between items-center mb-4 border-b border-gray-100 dark:border-zinc-800 pb-2">
-                 <h3 className="font-bold dark:text-white">{t.comments}</h3>
-                 <button onClick={() => setActiveCommentNoteId(null)}><X size={20} className="dark:text-white"/></button>
-               </div>
-               <div className="h-48 overflow-y-auto mb-4 space-y-3">
-                  {notes.find(n => n.id === activeCommentNoteId)?.comments.map(c => (
-                      <div key={c.id} className="bg-gray-50 dark:bg-zinc-800 p-3 rounded-xl">
-                          <p className="text-xs font-bold mb-1 dark:text-white">Guest</p>
-                          <p className="text-sm dark:text-gray-300">{c.text}</p>
-                      </div>
-                  ))}
-               </div>
-               <div className="flex gap-2">
-                  <input 
-                    type="text" 
-                    value={commentInput}
-                    onChange={e => setCommentInput(e.target.value)}
-                    placeholder={t.addComment}
-                    className="flex-1 bg-gray-100 dark:bg-zinc-800 dark:text-white rounded-full px-4 py-3 focus:outline-none"
-                  />
-                  <button onClick={submitComment} className="bg-black dark:bg-white dark:text-black text-white p-3 rounded-full">
-                      <ArrowRight size={20} />
-                  </button>
-               </div>
-            </div>
-          </div>
+        {activeCommentNoteId && currentUser && (
+            <CommentsModal 
+                note={notes.find(n => n.id === activeCommentNoteId)!} 
+                currentUser={currentUser}
+                users={users}
+                onClose={() => setActiveCommentNoteId(null)}
+                onSubmitComment={submitComment}
+                onLikeComment={handleLikeComment}
+                t={t}
+            />
         )}
 
         {/* Edit Profile Modal Overlay */}

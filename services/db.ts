@@ -195,10 +195,48 @@ class DatabaseService {
         }
     }
 
+    async toggleCommentLike(noteId: string, commentId: string, userId: string): Promise<void> {
+        const notes = this.getNotesFromStorage();
+        const note = notes.find(n => n.id === noteId);
+        if (note) {
+            const comment = note.comments.find(c => c.id === commentId);
+            if (comment) {
+                if (comment.isLikedByCurrentUser) {
+                    comment.likes = Math.max(0, (comment.likes || 0) - 1);
+                    comment.isLikedByCurrentUser = false;
+                } else {
+                    comment.likes = (comment.likes || 0) + 1;
+                    comment.isLikedByCurrentUser = true;
+                    
+                    if (comment.userId !== userId) {
+                        const currentUser = await this.getCurrentUser();
+                        if (currentUser) {
+                            await this.createNotification({
+                                id: Date.now().toString(),
+                                type: 'LIKE',
+                                fromUser: currentUser,
+                                toUserId: comment.userId,
+                                noteId: note.id,
+                                commentId: comment.id,
+                                timestamp: Date.now(),
+                                read: false
+                            });
+                        }
+                    }
+                }
+                this.saveNotesToStorage(notes);
+            }
+        }
+    }
+
     async addComment(noteId: string, comment: Comment): Promise<void> {
         const notes = this.getNotesFromStorage();
         const note = notes.find(n => n.id === noteId);
         if (note) {
+            // Ensure new fields are initialized
+            if(comment.likes === undefined) comment.likes = 0;
+            if(comment.isLikedByCurrentUser === undefined) comment.isLikedByCurrentUser = false;
+            
             note.comments.push(comment);
             this.saveNotesToStorage(notes);
         }

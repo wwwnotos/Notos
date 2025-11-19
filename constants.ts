@@ -1,5 +1,4 @@
 
-
 import { Note, NoteColor, NoteType, User, FontStyle, Notification } from './types';
 
 export const COUNTRY_CODES = [
@@ -11,16 +10,15 @@ export const COUNTRY_CODES = [
   { code: '+91', flag: '🇮🇳' },
 ];
 
-// Reordered: For You first, Trending second
-export const INTERESTS = [
-  'For You', 'Trending', 'Poetry', 'Music', 'Quotes', 'Art', 'Daily Life', 'Comedy'
-];
-
-// Mixed Arabic and English tags for Discover page fallback
+// Helper for default/fallback tags if no notes exist
 export const DEFAULT_TRENDING_TAGS = [
   '#Poetry', '#خواطر', '#Nature', '#تصويري', 
   '#Coffee', '#السعودية', '#Art', '#اقتباسات',
-  '#Travel', '#كتب', '#Music', '#مساء_الخير'
+  '#Travel', '#كتب', '#Music', '#مساء_الخير',
+  '#Love', '#حب', '#Photography', '#شعر',
+  '#Life', '#حياة', '#Code', '#برمجة',
+  '#Summer', '#صيف', '#Relax', '#هدوء',
+  '#Vibes', '#أفكار', '#Design', '#تصميم'
 ];
 
 export const TRANSLATIONS = {
@@ -74,6 +72,10 @@ export const TRANSLATIONS = {
     tags: 'Tags',
     postsWith: 'Posts with',
     plain: 'Plain', sun: 'Sun', sky: 'Sky', rose: 'Rose', mystic: 'Mystic', midnight: 'Midnight',
+    // Categories
+    forYou: 'For You',
+    trendingCat: 'Trending',
+    voice: 'Voice',
     // New Settings Translations
     personalInfo: 'Personal Information',
     security: 'Security',
@@ -90,7 +92,9 @@ export const TRANSLATIONS = {
     // Auth Validation
     emailReq: 'Email must be a valid address ending in .com',
     passReq: 'Password must contain letters, numbers, and symbols',
-    userReq: 'Username must be unique'
+    userReq: 'Username must be unique',
+    replyingTo: 'Replying to',
+    reply: 'Reply'
   },
   ar: {
     tagline: 'Share your echo',
@@ -142,6 +146,10 @@ export const TRANSLATIONS = {
     tags: 'وسوم',
     postsWith: 'المنشورات في',
     plain: 'عادي', sun: 'شمس', sky: 'سماء', rose: 'ورد', mystic: 'غموض', midnight: 'ليل',
+    // Categories
+    forYou: 'لك',
+    trendingCat: 'الأكثر تداولاً',
+    voice: 'صوتي',
     // New Settings Translations
     personalInfo: 'المعلومات الشخصية',
     security: 'الأمان',
@@ -158,6 +166,8 @@ export const TRANSLATIONS = {
     // Auth Validation
     emailReq: 'يجب أن يكون البريد الإلكتروني حقيقياً وينتهي بـ .com',
     passReq: 'كلمة المرور يجب أن تحتوي على أحرف وأرقام ورموز',
-    userReq: 'يجب أن يكون اسم المستخدم فريداً'
+    userReq: 'يجب أن يكون اسم المستخدم فريداً',
+    replyingTo: 'الرد على',
+    reply: 'رد'
   }
 };
