@@ -84,9 +84,6 @@ interface DynamicToastProps {
 }
 
 const DynamicIsland: React.FC<DynamicToastProps> = ({ message, type, visible, icon }) => {
-    // Refined logic: When invisible, it's a tiny pill (mimicking the physical island size roughly).
-    // When visible, it expands elastically.
-    
     return (
         <div 
             className={`fixed left-1/2 transform -translate-x-1/2 z-[100] bg-black text-white overflow-hidden flex items-center justify-between
@@ -197,9 +194,9 @@ const SplashScreen = ({ onFinish }: { onFinish: () => void }) => {
   );
 };
 
-// Updated Auth Screen - Adjusted Top Spacing & Validation
+// Updated Auth Screen
 const AuthScreen = ({ onLogin, t }: { onLogin: (email: string, username: string) => void, t: any }) => {
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1); // 1: Email, 2: Pass, 3: User, 4: OTP
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1); 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
@@ -223,14 +220,12 @@ const AuthScreen = ({ onLogin, t }: { onLogin: (email: string, username: string)
     }, 1000);
   };
 
-  // Validation Logic
   const emailValid = email.includes('@') && email.endsWith('.com');
-  const passValid = password.length >= 6 && /[a-zA-Z]/.test(password) && /\d/.test(password) && /[^a-zA-Z0-9]/.test(password);
+  const passValid = password.length >= 6;
   const userValid = username.length >= 3;
 
   return (
     <div className="h-screen w-full max-w-md mx-auto bg-white dark:bg-black px-8 flex flex-col justify-start transition-colors duration-500 pt-32"> 
-      
       <div className="mb-10 animate-fade-in">
         <h2 className="text-4xl font-bold mb-3 dark:text-white tracking-tight">{t.welcome}</h2>
         <p className="text-gray-400 dark:text-gray-500 text-sm font-medium">
@@ -345,7 +340,7 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>(Screen.SPLASH);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   
-  // Data State (Now loaded from DB)
+  // Data State
   const [users, setUsers] = useState<User[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -356,13 +351,12 @@ export default function App() {
   const t = TRANSLATIONS[lang];
 
   // Dynamic Category State
-  const [activeInterest, setActiveInterest] = useState<string>(''); // initialized in useEffect
+  const [activeInterest, setActiveInterest] = useState<string>(''); 
 
   const [searchQuery, setSearchQuery] = useState('');
   const [profileActiveTab, setProfileActiveTab] = useState<'NOTES' | 'LIKES'>('NOTES');
   const [settingsView, setSettingsView] = useState<'MAIN' | 'PERSONAL' | 'SECURITY' | 'NOTIFICATIONS'>('MAIN');
   
-  // Toast / Dynamic Island State
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'notification', visible: boolean, icon?: React.ReactNode }>({
       message: '', type: 'success', visible: false
   });
@@ -383,23 +377,20 @@ export default function App() {
   // Create Note State
   const [newNoteContent, setNewNoteContent] = useState('');
   const [newNoteAudioBlob, setNewNoteAudioBlob] = useState<Blob | null>(null);
-  const [newNoteAudioUrl, setNewNoteAudioUrl] = useState<string | null>(null); // For preview
+  const [newNoteAudioUrl, setNewNoteAudioUrl] = useState<string | null>(null); 
   const [newNoteDuration, setNewNoteDuration] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const [activeStyle, setActiveStyle] = useState({ font: FontStyle.SANS, color: NoteColor.WHITE, icon: 'Star' });
   const [isPolishing, setIsPolishing] = useState(false);
   const [isIconPickerOpen, setIsIconPickerOpen] = useState(false);
 
-  // Audio Recording Refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<any>(null);
   const typingIntervalRef = useRef<any>(null);
   
-  // Derived State
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  // Set initial interest
   useEffect(() => {
       setActiveInterest(t.forYou);
   }, [t.forYou]);
@@ -413,9 +404,10 @@ export default function App() {
     
     const topTags = Object.entries(tagCounts)
         .sort((a, b) => b[1] - a[1])
-        .slice(0, 5) // Take top 5
+        .slice(0, 5) // Top 5 tags
         .map(e => e[0]);
 
+    // Structure: For You -> Trending -> Voice -> Top Tags
     return [
         t.forYou,
         t.trendingCat,
@@ -424,8 +416,6 @@ export default function App() {
     ];
   }, [notes, t]);
 
-
-  // Cleanup interval on unmount
   useEffect(() => {
       return () => {
           if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
@@ -434,148 +424,69 @@ export default function App() {
 
   const showToast = (message: string, type: 'success' | 'notification' = 'success', icon?: React.ReactNode) => {
       setToast({ message, type, visible: true, icon });
-      // Play appropriate sound
       playSystemSound(type === 'success' ? 'success' : 'notification');
-      
       setTimeout(() => {
           setToast(prev => ({ ...prev, visible: false }));
       }, 3000);
   };
 
-  // External Notification Helper
-  const sendExternalNotification = (title: string, body: string) => {
-      if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
-          new Notification(title, { body, icon: '/icon.png' });
-      }
-  };
-
-  // Data Fetching
   const refreshData = async (specificUser?: User) => {
-      const allUsers = await db.getAllUsers();
-      const allNotes = await db.getNotes();
-      
-      // Resolve file URLs for audio notes if necessary
-      const processedNotes = await Promise.all(allNotes.map(async (n) => {
-          if (n.type === NoteType.AUDIO && n.audioUrl && !n.audioUrl.startsWith('blob') && !n.audioUrl.startsWith('http')) {
-             const resolved = await db.getFileUrl(n.audioUrl);
-             return { ...n, audioUrl: resolved || undefined };
-          }
-          return n;
-      }));
-      
-      // Resolve avatar/cover URLs
-      const processedUsers = await Promise.all(allUsers.map(async (u) => {
-           let av = u.avatarUrl;
-           let cv = u.coverUrl;
-           if (!av.startsWith('http')) { const r = await db.getFileUrl(av); if(r) av = r; }
-           if (!cv.startsWith('http')) { const r = await db.getFileUrl(cv); if(r) cv = r; }
-           return { ...u, avatarUrl: av, coverUrl: cv };
-      }));
+      try {
+        const allUsers = await db.getAllUsers();
+        const allNotes = await db.getNotes();
+        
+        // Resolve mapping for Firestore data
+        const currentUserToCheck = specificUser || currentUser;
+        const processedNotes = allNotes.map((n) => {
+            const likedBy = n.likedBy || [];
+            const isLiked = currentUserToCheck ? likedBy.includes(currentUserToCheck.id) : false;
 
-      setUsers(processedUsers);
-      setNotes(processedNotes);
+            // Map comments to add isLikedByCurrentUser
+            const processedComments = (n.comments || []).map((c) => ({
+                ...c,
+                isLikedByCurrentUser: currentUserToCheck && c.likedBy ? c.likedBy.includes(currentUserToCheck.id) : false
+            }));
 
-      const userForNotifs = specificUser || currentUser;
-      if (userForNotifs) {
-          const notifs = await db.getNotifications(userForNotifs.id);
-          setNotifications(notifs);
+            return { ...n, isLikedByCurrentUser: isLiked, comments: processedComments };
+        });
+        
+        setUsers(allUsers);
+        setNotes(processedNotes);
+
+        if (currentUserToCheck) {
+            const notifs = await db.getNotifications(currentUserToCheck.id);
+            setNotifications(notifs);
+        }
+      } catch (error) {
+          console.error("Refresh failed", error);
       }
   };
 
-  // --- Simulate Offline Activity ---
-  const simulateOfflineActivity = async (user: User) => {
-      // Logic: If user hasn't been here for a while (simulated by just checking if we have < 2 unread), add fake engagement
-      const existingUnread = await db.getNotifications(user.id);
-      
-      if (existingUnread.filter(n => !n.read).length === 0) {
-          // Create a fake notification to simulate "While you were away"
-          const fakeUser = users.find(u => u.id !== user.id) || users[0]; // Pick someone else
-          if (!fakeUser) return;
-
-          const activityType = Math.random() > 0.5 ? 'LIKE' : 'FOLLOW';
-          
-          const fakeNotif: Notification = {
-              id: Date.now().toString(),
-              type: activityType as any,
-              fromUser: fakeUser,
-              noteId: activityType === 'LIKE' ? notes[0]?.id : undefined,
-              timestamp: Date.now(),
-              read: false
-          };
-
-          // We need to bypass normal flow and inject directly to simulate external event
-          await db.createNotification(fakeNotif);
-          
-          // Refresh to show the count
-          const updatedNotifs = await db.getNotifications(user.id);
-          setNotifications(updatedNotifs);
-          
-          // Show toast on entry for this activity
-          const msg = activityType === 'LIKE' ? `${fakeUser.displayName} liked your note` : `${fakeUser.displayName} followed you`;
-          setTimeout(() => showToast(msg, 'notification'), 800);
-      }
-  };
-
-  // --- Initial Load ---
   useEffect(() => {
     const initApp = async () => {
-        // Request Notification Permission
         if ('Notification' in window) {
             Notification.requestPermission();
         }
-
         const userLang = navigator.language.split('-')[0];
         setLang(userLang === 'ar' ? 'ar' : 'en');
-        // Force LTR strictly as requested
         document.documentElement.dir = 'ltr';
 
-        // Simulated splash delay
         await new Promise(resolve => setTimeout(resolve, 2000));
 
-        // Check if user is already logged in
         const loggedUser = await db.getCurrentUser();
         if (loggedUser) {
             setCurrentUser(loggedUser);
             setScreen(Screen.FEED);
             await refreshData(loggedUser);
-            
-            // Simulate fetching data that happened while away
-            setTimeout(() => simulateOfflineActivity(loggedUser), 1000);
-
         } else {
             setScreen(Screen.AUTH);
+            // Load some initial public data even if not logged in
             refreshData();
         }
     };
-    
     initApp();
   }, []);
 
-  // --- Periodic Simulation (External Notification) ---
-  useEffect(() => {
-      // Randomly trigger a "notification" from outside if the app is open but idle
-      const interval = setInterval(() => {
-          if (currentUser && Math.random() > 0.9) { // Low chance every check
-              // Create a visual toast notification to show the Dynamic Island feature
-              const msgs = [
-                  "Sara liked your poem",
-                  "Ahmed started following you",
-                  "New trending topic: #Midnight"
-              ];
-              const msg = msgs[Math.floor(Math.random() * msgs.length)];
-              // Only show if we are NOT on notifications screen
-              if (screen !== Screen.NOTIFICATIONS) {
-                  showToast(msg, 'notification', <Bell size={18} className="text-white"/>);
-                  sendExternalNotification("Notos", msg);
-              }
-          }
-      }, 30000); // Check every 30 seconds
-
-      return () => clearInterval(interval);
-  }, [currentUser, screen]);
-
-
-  // Toggle Dark Mode class on HTML
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark');
@@ -586,22 +497,14 @@ export default function App() {
 
   const toggleTheme = () => setDarkMode(!darkMode);
 
-  // Navigation Handlers
   const handleNavigate = async (s: Screen) => {
-    // If going to notifications, mark all as read
     if (s === Screen.NOTIFICATIONS && currentUser) {
-        // Optimistically update local state
         const updated = notifications.map(n => ({ ...n, read: true }));
         setNotifications(updated);
-        
-        // Update DB
-        const dbNotifs = await db.getNotifications(currentUser.id);
-        dbNotifs.forEach(n => n.read = true);
-        localStorage.setItem('notos_notifications', JSON.stringify(await db.getAllNotificationsRaw())); 
     }
 
     setScreen(s);
-    setSettingsView('MAIN'); // Reset settings view
+    setSettingsView('MAIN'); 
     setViewingUserId(null); 
     setFollowListType(null);
     setProfileActiveTab('NOTES');
@@ -625,11 +528,15 @@ export default function App() {
   };
 
   const handleLogin = async (email: string, username: string) => {
-    const user = await db.login(email, username);
-    setCurrentUser(user);
-    await refreshData(user);
-    setScreen(Screen.FEED);
-    setTimeout(() => simulateOfflineActivity(user), 1000);
+    try {
+        const user = await db.login(email, username);
+        setCurrentUser(user);
+        await refreshData(user);
+        setScreen(Screen.FEED);
+    } catch (e) {
+        console.error("Login failed", e);
+        alert("Connection error. Please try again.");
+    }
   };
 
   const handleLogout = async () => {
@@ -640,8 +547,8 @@ export default function App() {
 
   const handleLike = async (noteId: string) => {
     if (!currentUser) return;
-    await db.toggleLike(noteId, currentUser.id);
-    // Optimistic UI update
+    
+    // Optimistic Update
     setNotes(prev => prev.map(n => {
         if (n.id === noteId) {
             const liked = !n.isLikedByCurrentUser;
@@ -653,14 +560,15 @@ export default function App() {
         }
         return n;
     }));
+
+    // DB Update
+    await db.toggleLike(noteId, currentUser.id);
   };
 
   const handleFollowToggle = async (targetUserId: string) => {
       if (!currentUser) return;
-      
       const { currentUser: updatedCurrent, targetUser: updatedTarget } = await db.toggleFollow(currentUser.id, targetUserId);
       
-      // Check if we followed (added to array)
       if (updatedCurrent.followingIds.includes(targetUserId)) {
           showToast(`Following ${updatedTarget.displayName}`, 'success');
       }
@@ -679,7 +587,7 @@ export default function App() {
 
   const handleLikeComment = async (commentId: string) => {
       if(!currentUser || !activeCommentNoteId) return;
-      await db.toggleCommentLike(activeCommentNoteId, commentId, currentUser.id);
+      
       // Optimistic update
       setNotes(prev => prev.map(n => {
           if (n.id === activeCommentNoteId) {
@@ -694,6 +602,8 @@ export default function App() {
           }
           return n;
       }));
+
+      await db.toggleCommentLike(activeCommentNoteId, commentId, currentUser.id);
   };
 
   const submitComment = async (text: string, parentId?: string) => {
@@ -706,6 +616,7 @@ export default function App() {
         timestamp: Date.now(),
         likes: 0,
         isLikedByCurrentUser: false,
+        likedBy: [],
         parentId: parentId
     };
 
@@ -729,14 +640,12 @@ export default function App() {
 
     let tags: string[] = [];
     if (newNoteContent.trim()) {
-       // Updated regex to support Arabic and other unicode characters
-       // Matches # followed by letters (Unicode), numbers, or underscores
        tags = newNoteContent.match(/#[\p{L}\p{N}_]+/gu) || [];
     }
 
-    let audioFileId = undefined;
+    let audioFileUrl = undefined;
     if (newNoteAudioBlob) {
-        audioFileId = await db.uploadFile(newNoteAudioBlob);
+        audioFileUrl = await db.uploadFile(newNoteAudioBlob);
     }
     
     const newNote: Note = {
@@ -744,8 +653,8 @@ export default function App() {
       userId: currentUser.id,
       author: currentUser,
       content: newNoteContent,
-      type: audioFileId ? NoteType.AUDIO : NoteType.TEXT,
-      audioUrl: audioFileId, // Store the ID, not the blob URL
+      type: audioFileUrl ? NoteType.AUDIO : NoteType.TEXT,
+      audioUrl: audioFileUrl,
       audioDuration: newNoteDuration || undefined,
       timestamp: Date.now(),
       likes: 0,
@@ -756,55 +665,41 @@ export default function App() {
     };
 
     await db.createNote(newNote);
-    
-    // Refresh to get clean state (resolve URLs)
     await refreshData();
 
     setNewNoteContent('');
     setNewNoteAudioBlob(null);
     setNewNoteAudioUrl(null);
     setNewNoteDuration(0);
-    
-    // Show Dynamic Island Notification
     showToast('Note Published', 'success');
-    
     setScreen(Screen.FEED);
   };
 
   const handleAISuggestTags = async () => {
     if (!newNoteContent) return;
     setIsPolishing(true);
-    
-    // Fetch suggestions
     const tags = await suggestTags(newNoteContent);
-    
     if (tags.length > 0) {
         const tagsString = "\n\n" + tags.join(' ');
-        
-        // Typewriter effect: append character by character
         let i = 0;
-        // Clear existing
         if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
 
         typingIntervalRef.current = setInterval(() => {
             const char = tagsString.charAt(i);
             setNewNoteContent(prev => prev + char);
             i++;
-            
             if (i >= tagsString.length) {
                 if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
                 setIsPolishing(false);
             }
-        }, 30); // Speed of typing
+        }, 30);
     } else {
         setIsPolishing(false);
     }
   };
 
-  // Actual MediaRecorder Implementation
   const toggleRecording = async () => {
     if (isRecording) {
-      // Stop Recording
       if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
         mediaRecorderRef.current.stop();
       }
@@ -814,7 +709,6 @@ export default function App() {
       }
       setIsRecording(false);
     } else {
-      // Start Recording
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const mediaRecorder = new MediaRecorder(stream);
@@ -837,7 +731,6 @@ export default function App() {
         mediaRecorder.start();
         setIsRecording(true);
         setNewNoteDuration(0);
-        
         timerRef.current = setInterval(() => {
             setNewNoteDuration(prev => prev + 1);
         }, 1000);
@@ -907,7 +800,6 @@ export default function App() {
       refreshData();
   };
 
-  // Filtering Logic
   const getFilteredNotes = () => {
     let filtered = notes;
     if (activeInterest === t.forYou) {
@@ -917,11 +809,10 @@ export default function App() {
     } else if (activeInterest === t.voice) {
        filtered = notes.filter(n => n.type === NoteType.AUDIO);
     } else {
-       // Hashtag Filtering
-       const keyword = activeInterest.toLowerCase();
+       // Hashtag Filtering (Exact Match for dynamic tags)
+       const keyword = activeInterest; 
        filtered = notes.filter(n => 
-         n.tags.some((tag: string) => tag.toLowerCase() === keyword) ||
-         n.content.toLowerCase().includes(keyword)
+         n.tags.includes(keyword)
        );
     }
     return filtered;
@@ -933,10 +824,7 @@ export default function App() {
        tagCounts[t] = (tagCounts[t] || 0) + 1;
     }));
     const topTags = Object.entries(tagCounts).sort((a,b) => b[1] - a[1]).slice(0, 6).map(e => e[0]);
-    
-    // Mix default trending tags if not enough user tags
     const mixedTags = [...new Set([...topTags, ...DEFAULT_TRENDING_TAGS])].slice(0, 12);
-    
     const creators = [...users].filter(u => u.id !== currentUser?.id).slice(0, 3);
     return { topTags: mixedTags, creators };
   };
@@ -949,159 +837,71 @@ export default function App() {
     return { tags, accounts };
   };
 
-  // --- Render Screen Content ---
+  const commonProps = {
+    currentScreen: screen,
+    onNavigate: handleNavigate,
+    unreadCount: unreadCount,
+    labels: { home: t.home, discover: t.discover, activity: t.activity, profile: t.profile }
+  };
 
   const renderContent = () => {
-    if (screen === Screen.SPLASH) return <SplashScreen onFinish={() => {}} />; 
-    if (screen === Screen.AUTH) return <AuthScreen onLogin={handleLogin} t={t} />;
-    
-    if (screen === Screen.CREATE) {
+      if (screen === Screen.SPLASH) return <SplashScreen onFinish={() => {}} />; 
+      if (screen === Screen.AUTH) return <AuthScreen onLogin={handleLogin} t={t} />;
+
+      if (screen === Screen.CREATE) {
         const isDarkBg = activeStyle.color.includes('slate') || activeStyle.color.includes('black') || activeStyle.color.includes('text-white');
         const textColor = isDarkBg ? 'text-white' : 'text-gray-900 dark:text-white';
-        const placeholderColor = isDarkBg ? 'placeholder-gray-400' : 'placeholder-gray-300';
 
         return (
           <div className="relative h-full flex flex-col bg-white dark:bg-black transition-colors duration-300">
-            {/* Minimalist Header */}
             <div className="absolute top-6 left-0 right-0 px-6 z-20 flex justify-between items-center">
-              <button 
-                onClick={() => setScreen(Screen.FEED)} 
-                className="p-2.5 bg-gray-100 dark:bg-zinc-800 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors shadow-sm"
-              >
-                 <X size={20} className="dark:text-white opacity-70"/>
-              </button>
-
+              <button onClick={() => setScreen(Screen.FEED)} className="p-2.5 bg-gray-100 dark:bg-zinc-800 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors shadow-sm"><X size={20} className="dark:text-white opacity-70"/></button>
               <div className="flex gap-3">
-                 <button 
-                    onClick={handleAISuggestTags}
-                    disabled={isPolishing || !newNoteContent}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-gray-100 dark:bg-zinc-800 rounded-full font-bold text-sm text-gray-600 dark:text-gray-300 shadow-sm hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors"
-                  >
-                    {isPolishing ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} fill="currentColor" className="opacity-50"/>}
-                    <span>{t.polish}</span>
+                 <button onClick={handleAISuggestTags} disabled={isPolishing || !newNoteContent} className="flex items-center gap-2 px-5 py-2.5 bg-gray-100 dark:bg-zinc-800 rounded-full font-bold text-sm text-gray-600 dark:text-gray-300 shadow-sm hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors">
+                    {isPolishing ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} fill="currentColor" className="opacity-50"/>}<span>{t.polish}</span>
                  </button>
-
-                 <button 
-                    onClick={handleCreateNote}
-                    className="px-6 py-2.5 bg-black dark:bg-white text-white dark:text-black rounded-full font-bold text-sm shadow-lg hover:opacity-90 transition-opacity disabled:opacity-50"
-                    disabled={!newNoteContent && !newNoteAudioBlob}
-                 >
-                    {t.post}
-                 </button>
+                 <button onClick={handleCreateNote} className="px-6 py-2.5 bg-black dark:bg-white text-white dark:text-black rounded-full font-bold text-sm shadow-lg hover:opacity-90 transition-opacity disabled:opacity-50" disabled={!newNoteContent && !newNoteAudioBlob}>{t.post}</button>
               </div>
             </div>
-            
             <div className={`flex-1 flex flex-col ${activeStyle.color} transition-colors duration-500`}>
-              {/* Main Text Area - Centered and Large */}
               <div className="relative flex-1 flex items-center">
-                <textarea
-                  placeholder={t.placeholder}
-                  className={`w-full h-full px-8 pt-32 pb-40 bg-transparent resize-none outline-none text-3xl leading-relaxed font-serif placeholder-opacity-40 ${textColor} ${activeStyle.font}`}
-                  value={newNoteContent}
-                  onChange={e => setNewNoteContent(e.target.value)}
-                  disabled={isPolishing} 
-                />
+                <textarea placeholder={t.placeholder} className={`w-full h-full px-8 pt-32 pb-40 bg-transparent resize-none outline-none text-3xl leading-relaxed font-serif placeholder-opacity-40 ${textColor} ${activeStyle.font}`} value={newNoteContent} onChange={e => setNewNoteContent(e.target.value)} disabled={isPolishing} />
               </div>
-
-              {/* Audio Preview (Floating if exists) */}
               {newNoteAudioUrl && (
                  <div className="absolute bottom-40 left-6 right-6 p-4 bg-white/20 rounded-2xl border border-black/5 backdrop-blur-md shadow-sm">
-                    <div className="flex justify-between items-center mb-2">
-                        <span className="text-xs font-bold uppercase tracking-wider opacity-50">{t.voiceNote}</span>
-                        <button onClick={() => { setNewNoteAudioBlob(null); setNewNoteAudioUrl(null); setNewNoteDuration(0); }}><X size={14}/></button>
-                    </div>
+                    <div className="flex justify-between items-center mb-2"><span className="text-xs font-bold uppercase tracking-wider opacity-50">{t.voiceNote}</span><button onClick={() => { setNewNoteAudioBlob(null); setNewNoteAudioUrl(null); setNewNoteDuration(0); }}><X size={14}/></button></div>
                     <AudioPlayer duration={newNoteDuration} src={newNoteAudioUrl} colorClass={isDarkBg ? 'text-white' : 'text-black'} />
                  </div>
               )}
-
-              {/* Bottom Controls: Toolbar & Colors */}
               <div className="absolute bottom-0 left-0 right-0 p-6 flex flex-col gap-6 bg-gradient-to-t from-white/10 to-transparent pb-8">
-                
-                {/* Tools Row: Mic, Icon */}
                 <div className="flex justify-center items-center gap-6">
-                     <button 
-                        onClick={toggleRecording}
-                        className={`p-3 rounded-full transition-all shadow-sm hover:scale-105 active:scale-95
-                                   ${isRecording ? 'bg-red-500 text-white animate-pulse shadow-red-200' : 'bg-white dark:bg-zinc-800 text-black dark:text-white'}`}
-                     >
-                        <Mic size={22} />
-                     </button>
-
-                     <button 
-                        onClick={() => setIsIconPickerOpen(true)}
-                        className="p-3 rounded-full bg-white dark:bg-zinc-800 text-black dark:text-white shadow-sm hover:scale-105 transition-transform"
-                     >
-                        {(() => {
-                            const Icon = AVAILABLE_ICONS.find(i => i.id === activeStyle.icon)?.icon || Star;
-                            return <Icon size={22} />;
-                        })()}
-                     </button>
+                     <button onClick={toggleRecording} className={`p-3 rounded-full transition-all shadow-sm hover:scale-105 active:scale-95 ${isRecording ? 'bg-red-500 text-white animate-pulse shadow-red-200' : 'bg-white dark:bg-zinc-800 text-black dark:text-white'}`}><Mic size={22} /></button>
+                     <button onClick={() => setIsIconPickerOpen(true)} className="p-3 rounded-full bg-white dark:bg-zinc-800 text-black dark:text-white shadow-sm hover:scale-105 transition-transform">{(() => { const Icon = AVAILABLE_ICONS.find(i => i.id === activeStyle.icon)?.icon || Star; return <Icon size={22} />; })()}</button>
                 </div>
-
-                {/* Color Palette Row (Minimalist Circles) */}
                 <div className="flex justify-center gap-4">
-                   {[
-                     { color: NoteColor.WHITE, label: t.plain },
-                     { color: NoteColor.YELLOW, label: t.sun },
-                     { color: NoteColor.BLUE, label: t.sky },
-                     { color: NoteColor.ROSE, label: t.rose },
-                     { color: NoteColor.VIOLET, label: t.mystic },
-                     { color: NoteColor.DARK, label: t.midnight },
-                   ].map(style => (
-                     <button
-                       key={style.label}
-                       onClick={() => setActiveStyle({ ...activeStyle, color: style.color })}
-                       className={`w-8 h-8 rounded-full transition-transform duration-300 shadow-sm
-                                  ${style.color.replace('text-white', '')} 
-                                  ${activeStyle.color === style.color ? 'scale-125 shadow-md ring-2 ring-offset-2 ring-black dark:ring-white dark:ring-offset-black' : 'opacity-80 hover:opacity-100 hover:scale-110'}`}
-                     />
+                   {[{ color: NoteColor.WHITE, label: t.plain }, { color: NoteColor.YELLOW, label: t.sun }, { color: NoteColor.BLUE, label: t.sky }, { color: NoteColor.ROSE, label: t.rose }, { color: NoteColor.VIOLET, label: t.mystic }, { color: NoteColor.DARK, label: t.midnight }].map(style => (
+                     <button key={style.label} onClick={() => setActiveStyle({ ...activeStyle, color: style.color })} className={`w-8 h-8 rounded-full transition-transform duration-300 shadow-sm ${style.color.replace('text-white', '')} ${activeStyle.color === style.color ? 'scale-125 shadow-md ring-2 ring-offset-2 ring-black dark:ring-white dark:ring-offset-black' : 'opacity-80 hover:opacity-100 hover:scale-110'}`} />
                    ))}
                 </div>
               </div>
-
-              {/* Icon Picker Overlay */}
               {isIconPickerOpen && (
                   <div className="absolute inset-x-0 bottom-0 bg-white dark:bg-zinc-900 rounded-t-3xl z-50 p-6 shadow-2xl animate-slide-up border-t border-gray-100 dark:border-zinc-800 h-[400px] flex flex-col">
-                      <div className="flex justify-between items-center mb-4 shrink-0">
-                        <h3 className="font-bold dark:text-white">Select Icon</h3>
-                        <button onClick={() => setIsIconPickerOpen(false)}><X className="dark:text-white"/></button>
-                      </div>
-                      <div className="grid grid-cols-4 gap-3 overflow-y-auto pb-4 no-scrollbar">
-                        {AVAILABLE_ICONS.map((item) => (
-                            <button 
-                              key={item.id}
-                              onClick={() => { setActiveStyle({...activeStyle, icon: item.id}); setIsIconPickerOpen(false); }}
-                              className={`flex flex-col items-center gap-2 p-3 rounded-xl transition-all
-                                          ${activeStyle.icon === item.id ? 'bg-black text-white dark:bg-white dark:text-black scale-105 shadow-md' : 'bg-gray-50 dark:bg-zinc-800 dark:text-white hover:bg-gray-100 dark:hover:bg-zinc-700'}`}
-                            >
-                              <item.icon size={24} />
-                              <span className="text-[10px] font-bold uppercase tracking-wider opacity-60">{item.label}</span>
-                            </button>
-                        ))}
-                      </div>
+                      <div className="flex justify-between items-center mb-4 shrink-0"><h3 className="font-bold dark:text-white">Select Icon</h3><button onClick={() => setIsIconPickerOpen(false)}><X className="dark:text-white"/></button></div>
+                      <div className="grid grid-cols-4 gap-3 overflow-y-auto pb-4 no-scrollbar">{AVAILABLE_ICONS.map((item) => (<button key={item.id} onClick={() => { setActiveStyle({...activeStyle, icon: item.id}); setIsIconPickerOpen(false); }} className={`flex flex-col items-center gap-2 p-3 rounded-xl transition-all ${activeStyle.icon === item.id ? 'bg-black text-white dark:bg-white dark:text-black scale-105 shadow-md' : 'bg-gray-50 dark:bg-zinc-800 dark:text-white hover:bg-gray-100 dark:hover:bg-zinc-700'}`}><item.icon size={24} /><span className="text-[10px] font-bold uppercase tracking-wider opacity-60">{item.label}</span></button>))}</div>
                   </div>
               )}
             </div>
           </div>
         );
-    }
-
-    // --- Common Layout Wrappers ---
-    const commonProps = {
-        currentScreen: screen,
-        onNavigate: handleNavigate,
-        unreadCount: unreadCount,
-        labels: { home: t.home, discover: t.discover, activity: t.activity, profile: t.profile }
-    };
-
-    if (screen === Screen.FEED) {
+      }
+      
+      if (screen === Screen.FEED) {
         const filteredNotes = getFilteredNotes();
         return (
           <Layout {...commonProps}>
              <div className="bg-gray-50 dark:bg-black min-h-full transition-colors duration-300 pt-14">
                <PullRefreshWrapper onRefresh={handleRefresh} isDark={darkMode}>
                   <div className="pt-4 pb-6 px-4">
-                     {/* Header */}
                      <div className="flex justify-between items-center mb-6">
                        <button onClick={() => setActiveInterest(t.forYou)} className="text-2xl font-bold dark:text-white">Notos</button>
                        <button onClick={toggleTheme} className="p-2 rounded-full bg-white dark:bg-zinc-800 shadow-sm hover:scale-110 transition-transform">
@@ -1144,9 +944,9 @@ export default function App() {
              </div>
           </Layout>
         );
-    }
-
-    if (screen === Screen.DISCOVER) {
+      }
+      // Rest of the screens (Discover, Profile, Settings etc.)
+      if (screen === Screen.DISCOVER) {
         const { topTags, creators } = getDiscoverData();
         const { tags, accounts } = getSearchResults();
 
@@ -1156,109 +956,26 @@ export default function App() {
               <PullRefreshWrapper onRefresh={handleRefresh} isDark={darkMode}>
                 <div className="p-4 pb-24">
                     <div className="relative mb-6 sticky top-2 z-10 bg-gray-50/90 dark:bg-black/90 backdrop-blur-md pb-2 rounded-b-xl">
-                        <input 
-                        type="text" 
-                        placeholder={t.searchPlaceholder}
-                        value={searchQuery}
-                        onChange={e => setSearchQuery(e.target.value)}
-                        className="w-full bg-white dark:bg-zinc-900 dark:text-white rounded-2xl py-3.5 pl-11 pr-4 shadow-sm focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition-shadow"
-                        />
-                        <div className="absolute top-3.5 left-4 text-gray-400">
-                            <Search size={20} />
-                        </div>
+                        <input type="text" placeholder={t.searchPlaceholder} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-white dark:bg-zinc-900 dark:text-white rounded-2xl py-3.5 pl-11 pr-4 shadow-sm focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition-shadow" />
+                        <div className="absolute top-3.5 left-4 text-gray-400"><Search size={20} /></div>
                     </div>
-
                     {searchQuery ? (
                         <div className="space-y-6 animate-fade-in">
                             {tags.length > 0 && (
-                                <div>
-                                    <h3 className="font-bold mb-3 text-lg dark:text-white">{t.tags}</h3>
-                                    <div className="flex flex-wrap gap-2">
-                                        {tags.map(tag => (
-                                            <button 
-                                            key={tag as string} 
-                                            onClick={() => handleTagClick(tag as string)}
-                                            className="bg-white dark:bg-zinc-900 dark:text-white px-4 py-2 rounded-xl shadow-sm hover:shadow-md transition-shadow"
-                                            >
-                                            {tag}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
+                                <div><h3 className="font-bold mb-3 text-lg dark:text-white">{t.tags}</h3><div className="flex flex-wrap gap-2">{tags.map(tag => (<button key={tag as string} onClick={() => handleTagClick(tag as string)} className="bg-white dark:bg-zinc-900 dark:text-white px-4 py-2 rounded-xl shadow-sm hover:shadow-md transition-shadow">{tag}</button>))}</div></div>
                             )}
                             {accounts.length > 0 && (
-                                <div>
-                                    <h3 className="font-bold mb-3 text-lg dark:text-white">{t.accounts}</h3>
-                                    <div className="space-y-3">
-                                        {accounts.map(user => {
-                                            const isFollowing = currentUser?.followingIds.includes(user.id);
-                                            return (
-                                            <div key={user.id} className="flex items-center justify-between bg-white dark:bg-zinc-900 p-3 rounded-2xl shadow-sm">
-                                                <div className="flex items-center gap-3 cursor-pointer" onClick={() => handleUserClick(user.id)}>
-                                                    <img src={user.avatarUrl} className="w-10 h-10 rounded-full object-cover" alt=""/>
-                                                    <div>
-                                                        <p className="font-bold text-sm dark:text-white">{user.displayName}</p>
-                                                        <p className="text-xs text-gray-500">@{user.username}</p>
-                                                    </div>
-                                                </div>
-                                                {currentUser && user.id !== currentUser.id && (
-                                                <button 
-                                                    onClick={() => handleFollowToggle(user.id)}
-                                                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${isFollowing ? 'bg-gray-100 dark:bg-zinc-800 text-black dark:text-white' : 'bg-black dark:bg-white text-white dark:text-black'}`}
-                                                >
-                                                    {isFollowing ? t.unfollow : t.follow}
-                                                </button>
-                                                )}
-                                            </div>
-                                        )})}
-                                    </div>
-                                </div>
+                                <div><h3 className="font-bold mb-3 text-lg dark:text-white">{t.accounts}</h3><div className="space-y-3">{accounts.map(user => { const isFollowing = currentUser?.followingIds.includes(user.id); return (
+                                    <div key={user.id} className="flex items-center justify-between bg-white dark:bg-zinc-900 p-3 rounded-2xl shadow-sm"><div className="flex items-center gap-3 cursor-pointer" onClick={() => handleUserClick(user.id)}><img src={user.avatarUrl} className="w-10 h-10 rounded-full object-cover" alt="" /><div><p className="font-bold text-sm dark:text-white">{user.displayName}</p><p className="text-xs text-gray-500">@{user.username}</p></div></div>{currentUser && user.id !== currentUser.id && (<button onClick={() => handleFollowToggle(user.id)} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${isFollowing ? 'bg-gray-100 dark:bg-zinc-800 text-black dark:text-white' : 'bg-black dark:bg-white text-white dark:text-black'}`}>{isFollowing ? t.unfollow : t.follow}</button>)}</div>
+                                )})}</div></div>
                             )}
                         </div>
                     ) : (
                         <div className="animate-slide-up">
-                            <div className="mb-8">
-                                <h3 className="font-bold mb-3 text-lg dark:text-white">{t.trending}</h3>
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                {topTags.map((tag, i) => (
-                                    <button 
-                                    key={`${tag}-${i}`} 
-                                    onClick={() => handleTagClick(tag as string)}
-                                    className="bg-white dark:bg-zinc-900 p-4 rounded-2xl text-black dark:text-white font-bold text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors shadow-sm border border-gray-100 dark:border-zinc-800"
-                                    >
-                                    {tag}
-                                    </button>
-                                ))}
-                                </div>
-                            </div>
-
-                            <div>
-                                <h3 className="font-bold mb-3 text-lg dark:text-white">{t.featured}</h3>
-                                <div className="space-y-3">
-                                {creators.map(user => {
-                                    const isFollowing = currentUser?.followingIds.includes(user.id);
-                                    return (
-                                    <div key={user.id} className="flex items-center justify-between bg-white dark:bg-zinc-900 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-zinc-800">
-                                    <div 
-                                        className="flex items-center gap-3 cursor-pointer"
-                                        onClick={() => handleUserClick(user.id)}
-                                    >
-                                        <img src={user.avatarUrl} className="w-12 h-12 rounded-full object-cover" alt=""/>
-                                        <div>
-                                        <p className="font-bold text-sm dark:text-white">{user.displayName}</p>
-                                        <p className="text-xs text-gray-500">@{user.username}</p>
-                                        </div>
-                                    </div>
-                                    <button 
-                                    onClick={() => handleFollowToggle(user.id)}
-                                    className={`px-5 py-2 text-xs font-bold rounded-full transition-colors ${isFollowing ? 'bg-gray-100 dark:bg-zinc-800 text-black dark:text-white' : 'bg-black dark:bg-white dark:text-black text-white'}`}
-                                    >
-                                        {isFollowing ? t.unfollow : t.follow}
-                                    </button>
-                                    </div>
-                                )})}
-                                </div>
-                            </div>
+                            <div className="mb-8"><h3 className="font-bold mb-3 text-lg dark:text-white">{t.trending}</h3><div className="grid grid-cols-2 md:grid-cols-3 gap-3">{topTags.map((tag, i) => (<button key={`${tag}-${i}`} onClick={() => handleTagClick(tag as string)} className="bg-white dark:bg-zinc-900 p-4 rounded-2xl text-black dark:text-white font-bold text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors shadow-sm border border-gray-100 dark:border-zinc-800">{tag}</button>))}</div></div>
+                            <div><h3 className="font-bold mb-3 text-lg dark:text-white">{t.featured}</h3><div className="space-y-3">{creators.map(user => { const isFollowing = currentUser?.followingIds.includes(user.id); return (
+                                <div key={user.id} className="flex items-center justify-between bg-white dark:bg-zinc-900 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-zinc-800"><div className="flex items-center gap-3 cursor-pointer" onClick={() => handleUserClick(user.id)}><img src={user.avatarUrl} className="w-12 h-12 rounded-full object-cover" alt="" /><div><p className="font-bold text-sm dark:text-white">{user.displayName}</p><p className="text-xs text-gray-500">@{user.username}</p></div></div><button onClick={() => handleFollowToggle(user.id)} className={`px-5 py-2 text-xs font-bold rounded-full transition-colors ${isFollowing ? 'bg-gray-100 dark:bg-zinc-800 text-black dark:text-white' : 'bg-black dark:bg-white dark:text-black text-white'}`}>{isFollowing ? t.unfollow : t.follow}</button></div>
+                            )})}</div></div>
                         </div>
                     )}
                 </div>
@@ -1266,544 +983,72 @@ export default function App() {
             </div>
           </Layout>
         );
-    }
-
-    if (screen === Screen.SETTINGS) {
+      }
+      
+      if (screen === Screen.SETTINGS) {
         const backToMain = () => setSettingsView('MAIN');
-
-        // Render Sub-Views
         if (settingsView === 'PERSONAL' && currentUser) {
             return (
                 <Layout {...commonProps}>
                     <div className="min-h-full bg-white dark:bg-black animate-slide-up pt-12">
-                        <div className="p-4 flex items-center gap-4 border-b border-gray-100 dark:border-zinc-800">
-                            <button onClick={backToMain} className="dark:text-white"><ArrowLeft /></button>
-                            <h2 className="text-xl font-bold dark:text-white">{t.personalInfo}</h2>
-                        </div>
-                        <div className="p-4 space-y-6">
-                             <div className="space-y-4">
-                                 <div className="bg-gray-50 dark:bg-zinc-900 rounded-xl p-4">
-                                     <p className="text-xs text-gray-400 uppercase font-bold mb-1">{t.name}</p>
-                                     <p className="text-lg font-medium dark:text-white">{currentUser.displayName}</p>
-                                 </div>
-                                 <div className="bg-gray-50 dark:bg-zinc-900 rounded-xl p-4">
-                                     <p className="text-xs text-gray-400 uppercase font-bold mb-1">{t.username}</p>
-                                     <p className="text-lg font-medium dark:text-white">@{currentUser.username}</p>
-                                 </div>
-                                 <div className="bg-gray-50 dark:bg-zinc-900 rounded-xl p-4">
-                                     <p className="text-xs text-gray-400 uppercase font-bold mb-1">{t.email}</p>
-                                     <p className="text-lg font-medium dark:text-white">{currentUser.email}</p>
-                                 </div>
-                                 <div className="bg-gray-50 dark:bg-zinc-900 rounded-xl p-4">
-                                     <p className="text-xs text-gray-400 uppercase font-bold mb-1">{t.bio}</p>
-                                     <p className="text-base dark:text-white">{currentUser.bio}</p>
-                                 </div>
-                             </div>
-                             <button 
-                                onClick={() => { setScreen(Screen.PROFILE); openEditProfile(); }}
-                                className="w-full py-3 bg-black dark:bg-white text-white dark:text-black rounded-xl font-bold"
-                             >
-                                 {t.editProfile}
-                             </button>
-                        </div>
+                        <div className="p-4 flex items-center gap-4 border-b border-gray-100 dark:border-zinc-800"><button onClick={backToMain} className="dark:text-white"><ArrowLeft /></button><h2 className="text-xl font-bold dark:text-white">{t.personalInfo}</h2></div>
+                        <div className="p-4 space-y-6"><div className="space-y-4"><div className="bg-gray-50 dark:bg-zinc-900 rounded-xl p-4"><p className="text-xs text-gray-400 uppercase font-bold mb-1">{t.name}</p><p className="text-lg font-medium dark:text-white">{currentUser.displayName}</p></div><div className="bg-gray-50 dark:bg-zinc-900 rounded-xl p-4"><p className="text-xs text-gray-400 uppercase font-bold mb-1">{t.username}</p><p className="text-lg font-medium dark:text-white">@{currentUser.username}</p></div><div className="bg-gray-50 dark:bg-zinc-900 rounded-xl p-4"><p className="text-xs text-gray-400 uppercase font-bold mb-1">{t.email}</p><p className="text-lg font-medium dark:text-white">{currentUser.email}</p></div><div className="bg-gray-50 dark:bg-zinc-900 rounded-xl p-4"><p className="text-xs text-gray-400 uppercase font-bold mb-1">{t.bio}</p><p className="text-base dark:text-white">{currentUser.bio}</p></div></div><button onClick={() => { setScreen(Screen.PROFILE); openEditProfile(); }} className="w-full py-3 bg-black dark:bg-white text-white dark:text-black rounded-xl font-bold">{t.editProfile}</button></div>
                     </div>
                 </Layout>
             );
         }
-
         if (settingsView === 'SECURITY' && currentUser) {
-            return (
-                <Layout {...commonProps}>
-                    <div className="min-h-full bg-white dark:bg-black animate-slide-up pt-12">
-                        <div className="p-4 flex items-center gap-4 border-b border-gray-100 dark:border-zinc-800">
-                            <button onClick={backToMain} className="dark:text-white"><ArrowLeft /></button>
-                            <h2 className="text-xl font-bold dark:text-white">{t.security}</h2>
-                        </div>
-                        <div className="p-4 space-y-6">
-                            <div className="bg-gray-50 dark:bg-zinc-900 rounded-xl p-4 flex items-center justify-between">
-                                <div>
-                                    <h3 className="font-bold text-lg dark:text-white mb-1">{t.privateAccount}</h3>
-                                    <p className="text-sm text-gray-500 max-w-[250px] leading-snug">{t.privateDescription}</p>
-                                </div>
-                                <button 
-                                    onClick={() => updateSettings({ isPrivate: !currentUser.isPrivate })}
-                                    className={`transition-colors ${currentUser.isPrivate ? 'text-green-500' : 'text-gray-300'}`}
-                                >
-                                    {currentUser.isPrivate ? <ToggleRight size={48} fill="currentColor" /> : <ToggleLeft size={48} />}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </Layout>
-            );
+             return <Layout {...commonProps}><div className="min-h-full bg-white dark:bg-black animate-slide-up pt-12"><div className="p-4 flex items-center gap-4 border-b border-gray-100 dark:border-zinc-800"><button onClick={backToMain} className="dark:text-white"><ArrowLeft /></button><h2 className="text-xl font-bold dark:text-white">{t.security}</h2></div><div className="p-4"><div className="bg-gray-50 dark:bg-zinc-900 rounded-xl p-4 flex items-center justify-between"><div><h3 className="font-bold text-lg dark:text-white mb-1">{t.privateAccount}</h3><p className="text-sm text-gray-500 max-w-[250px] leading-snug">{t.privateDescription}</p></div><button onClick={() => updateSettings({ isPrivate: !currentUser.isPrivate })} className={`transition-colors ${currentUser.isPrivate ? 'text-green-500' : 'text-gray-300'}`}>{currentUser.isPrivate ? <ToggleRight size={48} fill="currentColor" /> : <ToggleLeft size={48} />}</button></div></div></div></Layout>
         }
-
         if (settingsView === 'NOTIFICATIONS' && currentUser) {
-            const toggleNotif = (key: keyof typeof currentUser.notificationSettings) => {
-                const newSettings = { ...currentUser.notificationSettings, [key]: !currentUser.notificationSettings[key] };
-                updateSettings({ notificationSettings: newSettings });
-            };
-
-            return (
-                <Layout {...commonProps}>
-                    <div className="min-h-full bg-white dark:bg-black animate-slide-up pt-12">
-                        <div className="p-4 flex items-center gap-4 border-b border-gray-100 dark:border-zinc-800">
-                            <button onClick={backToMain} className="dark:text-white"><ArrowLeft /></button>
-                            <h2 className="text-xl font-bold dark:text-white">{t.notifications}</h2>
-                        </div>
-                        <div className="p-4 space-y-4">
-                             <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">{t.pushNotifications}</h3>
-                             
-                             {/* Likes - Monochrome Icon */}
-                             <div className="bg-gray-50 dark:bg-zinc-900 rounded-xl p-4 flex items-center justify-between">
-                                 <div className="flex items-center gap-3">
-                                     <div className="p-2 bg-transparent border border-gray-200 dark:border-zinc-800 text-black dark:text-white rounded-full"><Heart size={18}/></div>
-                                     <span className="font-bold dark:text-white">{t.notifyLikes}</span>
-                                 </div>
-                                 <button onClick={() => toggleNotif('likes')} className={`transition-colors ${currentUser.notificationSettings.likes ? 'text-green-500' : 'text-gray-300'}`}>
-                                     {currentUser.notificationSettings.likes ? <ToggleRight size={40} fill="currentColor"/> : <ToggleLeft size={40}/>}
-                                 </button>
-                             </div>
-
-                             {/* Follows - Monochrome Icon */}
-                             <div className="bg-gray-50 dark:bg-zinc-900 rounded-xl p-4 flex items-center justify-between">
-                                 <div className="flex items-center gap-3">
-                                     <div className="p-2 bg-transparent border border-gray-200 dark:border-zinc-800 text-black dark:text-white rounded-full"><UserPlus size={18}/></div>
-                                     <span className="font-bold dark:text-white">{t.notifyFollows}</span>
-                                 </div>
-                                 <button onClick={() => toggleNotif('follows')} className={`transition-colors ${currentUser.notificationSettings.follows ? 'text-green-500' : 'text-gray-300'}`}>
-                                     {currentUser.notificationSettings.follows ? <ToggleRight size={40} fill="currentColor"/> : <ToggleLeft size={40}/>}
-                                 </button>
-                             </div>
-
-                             {/* New Posts - Monochrome Icon */}
-                             <div className="bg-gray-50 dark:bg-zinc-900 rounded-xl p-4 flex items-center justify-between">
-                                 <div className="flex items-center gap-3">
-                                     <div className="p-2 bg-transparent border border-gray-200 dark:border-zinc-800 text-black dark:text-white rounded-full"><Bell size={18}/></div>
-                                     <span className="font-bold dark:text-white">{t.notifyPosts}</span>
-                                 </div>
-                                 <button onClick={() => toggleNotif('newPosts')} className={`transition-colors ${currentUser.notificationSettings.newPosts ? 'text-green-500' : 'text-gray-300'}`}>
-                                     {currentUser.notificationSettings.newPosts ? <ToggleRight size={40} fill="currentColor"/> : <ToggleLeft size={40}/>}
-                                 </button>
-                             </div>
-                        </div>
-                    </div>
-                </Layout>
-            );
+             const toggleNotif = (key: keyof typeof currentUser.notificationSettings) => { const newSettings = { ...currentUser.notificationSettings, [key]: !currentUser.notificationSettings[key] }; updateSettings({ notificationSettings: newSettings }); };
+             return <Layout {...commonProps}><div className="min-h-full bg-white dark:bg-black animate-slide-up pt-12"><div className="p-4 flex items-center gap-4 border-b border-gray-100 dark:border-zinc-800"><button onClick={backToMain} className="dark:text-white"><ArrowLeft /></button><h2 className="text-xl font-bold dark:text-white">{t.notifications}</h2></div><div className="p-4 space-y-4"><h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">{t.pushNotifications}</h3><div className="bg-gray-50 dark:bg-zinc-900 rounded-xl p-4 flex items-center justify-between"><div className="flex items-center gap-3"><div className="p-2 bg-transparent border border-gray-200 dark:border-zinc-800 text-black dark:text-white rounded-full"><Heart size={18}/></div><span className="font-bold dark:text-white">{t.notifyLikes}</span></div><button onClick={() => toggleNotif('likes')} className={`transition-colors ${currentUser.notificationSettings.likes ? 'text-green-500' : 'text-gray-300'}`}>{currentUser.notificationSettings.likes ? <ToggleRight size={40} fill="currentColor"/> : <ToggleLeft size={40}/>}</button></div></div></div></Layout>
         }
 
-        // Main Settings View
         return (
             <Layout {...commonProps}>
                 <div className="min-h-full bg-white dark:bg-black animate-slide-up pt-12">
-                    <div className="p-4 flex items-center gap-4 border-b border-gray-100 dark:border-zinc-800">
-                        <button onClick={() => setScreen(Screen.PROFILE)} className="dark:text-white"><ArrowLeft /></button>
-                        <h2 className="text-xl font-bold dark:text-white">{t.settings}</h2>
-                    </div>
+                    <div className="p-4 flex items-center gap-4 border-b border-gray-100 dark:border-zinc-800"><button onClick={() => setScreen(Screen.PROFILE)} className="dark:text-white"><ArrowLeft /></button><h2 className="text-xl font-bold dark:text-white">{t.settings}</h2></div>
                     <div className="p-4 space-y-6">
-                        <div className="space-y-1">
-                             <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">Account</h3>
-                             <div className="bg-gray-50 dark:bg-zinc-900 rounded-xl overflow-hidden">
-                                 <button onClick={() => setSettingsView('PERSONAL')} className="w-full p-4 text-left flex justify-between items-center hover:bg-gray-100 dark:hover:bg-zinc-800 dark:text-white transition-colors">
-                                     <div className="flex items-center gap-3"><UserIcon size={20}/> {t.personalInfo}</div>
-                                     <ChevronRight size={16} className="text-gray-400"/>
-                                 </button>
-                                 <div className="h-px bg-gray-200 dark:bg-zinc-800 w-full"></div>
-                                 <button onClick={() => setSettingsView('SECURITY')} className="w-full p-4 text-left flex justify-between items-center hover:bg-gray-100 dark:hover:bg-zinc-800 dark:text-white transition-colors">
-                                     <div className="flex items-center gap-3"><Shield size={20}/> {t.security}</div>
-                                     <ChevronRight size={16} className="text-gray-400"/>
-                                 </button>
-                             </div>
-                        </div>
-
-                        <div className="space-y-1">
-                             <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">App</h3>
-                             <div className="bg-gray-50 dark:bg-zinc-900 rounded-xl overflow-hidden">
-                                 <button onClick={() => setSettingsView('NOTIFICATIONS')} className="w-full p-4 text-left flex justify-between items-center hover:bg-gray-100 dark:hover:bg-zinc-800 dark:text-white transition-colors">
-                                     <div className="flex items-center gap-3"><Bell size={20}/> {t.notifications}</div>
-                                     <ChevronRight size={16} className="text-gray-400"/>
-                                 </button>
-                                 <div className="h-px bg-gray-200 dark:bg-zinc-800 w-full"></div>
-                                 <button onClick={toggleTheme} className="w-full p-4 text-left flex justify-between items-center hover:bg-gray-100 dark:hover:bg-zinc-800 dark:text-white transition-colors">
-                                     <div className="flex items-center gap-3">{darkMode ? <Sun size={20}/> : <Moon size={20}/>} {t.appearance}</div>
-                                     <span className="text-xs text-gray-400">{darkMode ? 'Dark' : 'Light'}</span>
-                                 </button>
-                                 <div className="h-px bg-gray-200 dark:bg-zinc-800 w-full"></div>
-                                 <button className="w-full p-4 text-left flex justify-between items-center hover:bg-gray-100 dark:hover:bg-zinc-800 dark:text-white transition-colors">
-                                     <div className="flex items-center gap-3"><HelpCircle size={20}/> {t.help}</div>
-                                     <ChevronRight size={16} className="text-gray-400"/>
-                                 </button>
-                             </div>
-                        </div>
-
-                        <button 
-                            onClick={handleLogout}
-                            className="w-full p-4 bg-red-50 dark:bg-red-900/20 text-red-500 rounded-xl font-bold flex justify-center items-center gap-2 mt-8"
-                        >
-                            <LogOut size={20} /> {t.logout}
-                        </button>
-                        <div className="text-center text-xs text-gray-300 mt-4">Version 1.0.5</div>
+                        <div className="space-y-1"><h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">Account</h3><div className="bg-gray-50 dark:bg-zinc-900 rounded-xl overflow-hidden"><button onClick={() => setSettingsView('PERSONAL')} className="w-full p-4 text-left flex justify-between items-center hover:bg-gray-100 dark:hover:bg-zinc-800 dark:text-white transition-colors"><div className="flex items-center gap-3"><UserIcon size={20}/> {t.personalInfo}</div><ChevronRight size={16} className="text-gray-400"/></button><div className="h-px bg-gray-200 dark:bg-zinc-800 w-full"></div><button onClick={() => setSettingsView('SECURITY')} className="w-full p-4 text-left flex justify-between items-center hover:bg-gray-100 dark:hover:bg-zinc-800 dark:text-white transition-colors"><div className="flex items-center gap-3"><Shield size={20}/> {t.security}</div><ChevronRight size={16} className="text-gray-400"/></button></div></div>
+                        <div className="space-y-1"><h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">App</h3><div className="bg-gray-50 dark:bg-zinc-900 rounded-xl overflow-hidden"><button onClick={() => setSettingsView('NOTIFICATIONS')} className="w-full p-4 text-left flex justify-between items-center hover:bg-gray-100 dark:hover:bg-zinc-800 dark:text-white transition-colors"><div className="flex items-center gap-3"><Bell size={20}/> {t.notifications}</div><ChevronRight size={16} className="text-gray-400"/></button><div className="h-px bg-gray-200 dark:bg-zinc-800 w-full"></div><button onClick={toggleTheme} className="w-full p-4 text-left flex justify-between items-center hover:bg-gray-100 dark:hover:bg-zinc-800 dark:text-white transition-colors"><div className="flex items-center gap-3">{darkMode ? <Sun size={20}/> : <Moon size={20}/>} {t.appearance}</div><span className="text-xs text-gray-400">{darkMode ? 'Dark' : 'Light'}</span></button><div className="h-px bg-gray-200 dark:bg-zinc-800 w-full"></div><button className="w-full p-4 text-left flex justify-between items-center hover:bg-gray-100 dark:hover:bg-zinc-800 dark:text-white transition-colors"><div className="flex items-center gap-3"><HelpCircle size={20}/> {t.help}</div><ChevronRight size={16} className="text-gray-400"/></button></div></div>
+                        <button onClick={handleLogout} className="w-full p-4 bg-red-50 dark:bg-red-900/20 text-red-500 rounded-xl font-bold flex justify-center items-center gap-2 mt-8"><LogOut size={20} /> {t.logout}</button>
+                        <div className="text-center text-xs text-gray-300 mt-4">Version 1.0.6</div>
                     </div>
                 </div>
             </Layout>
         )
-    }
-
-    if (screen === Screen.TAG_DETAILS) {
-        const tagNotes = notes.filter(n => n.tags.includes((selectedTag as string) || ''));
-        return (
-            <Layout {...commonProps}>
-                <div className="bg-gray-50 dark:bg-black min-h-full transition-colors duration-300 pt-12">
-                    <div className="sticky top-0 z-10 bg-white/80 dark:bg-black/80 backdrop-blur-md p-4 flex items-center gap-3 border-b border-gray-100 dark:border-zinc-800">
-                        <button onClick={() => setScreen(Screen.DISCOVER)} className="dark:text-white"><ArrowLeft /></button>
-                        <div>
-                            <h2 className="font-bold text-lg dark:text-white">{selectedTag}</h2>
-                            <p className="text-xs text-gray-500">{tagNotes.length} {t.postsWith}</p>
-                        </div>
-                    </div>
-                    <div className="p-4 space-y-4 pb-24">
-                        {tagNotes.map(note => (
-                             <NoteCard 
-                                key={note.id} 
-                                note={note} 
-                                onLike={handleLike} 
-                                onComment={handleComment}
-                                onUserClick={handleUserClick}
-                                onTagClick={handleTagClick}
-                             />
-                        ))}
-                    </div>
-                </div>
-            </Layout>
-        );
-    }
-
-    if (screen === Screen.NOTIFICATIONS) {
-        return (
-            <Layout {...commonProps}>
-             <div className="bg-gray-50 dark:bg-black min-h-full transition-colors duration-300 pt-14">
-               <PullRefreshWrapper onRefresh={handleRefresh} isDark={darkMode}>
-                 <div className="p-4 pb-24">
-                    <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-3xl font-bold dark:text-white tracking-tight">{t.activity}</h2>
-                        <button 
-                            className="text-xs font-bold text-gray-400 hover:text-black dark:hover:text-white"
-                            onClick={() => setNotifications(notifications.map(n => ({ ...n, read: true })))}
-                        >
-                            Mark all read
-                        </button>
-                    </div>
-                    
-                    <div className="space-y-4">
-                        {notifications.map(notif => (
-                        <div 
-                            key={notif.id} 
-                            onClick={() => handleUserClick(notif.fromUser.id)}
-                            className={`flex gap-4 items-center p-4 rounded-2xl shadow-sm cursor-pointer border border-gray-50 dark:border-zinc-800 relative overflow-hidden transition-all active:scale-98
-                                       ${!notif.read ? 'bg-blue-50 dark:bg-blue-900/10' : 'bg-white dark:bg-zinc-900'}`}
-                        >
-                            {!notif.read && <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500"></div>}
-                            
-                            {/* Monochrome Notification Icons */}
-                            <div className="p-3 rounded-full shrink-0 bg-transparent border border-gray-200 dark:border-zinc-800 text-black dark:text-white">
-                                {notif.type === 'LIKE' ? <Heart size={18} fill="currentColor"/> : <UserPlus size={18} />}
-                            </div>
-                            <div className="flex-1">
-                                <p className="text-sm dark:text-white leading-snug">
-                                <span className="font-bold">{notif.fromUser.displayName}</span>
-                                {notif.type === 'LIKE' ? ` ${t.liked}` : ` ${t.startedFollowing}`}
-                                </p>
-                                <p className="text-xs text-gray-400 mt-1 font-medium">Just now</p>
-                            </div>
-                            {notif.type === 'FOLLOW' && (
-                                <button className="px-3 py-1 bg-black dark:bg-white text-white dark:text-black text-xs font-bold rounded-full">Follow</button>
-                            )}
-                        </div>
-                        ))}
-                        {notifications.length === 0 && (
-                            <div className="text-center py-10 text-gray-400">
-                                <Bell size={48} className="mx-auto mb-4 opacity-20" />
-                                <p>No new activity.</p>
-                            </div>
-                        )}
-                    </div>
-                 </div>
-               </PullRefreshWrapper>
-             </div>
-           </Layout>
-        );
-    }
-
-    // Profile Logic
-    if (screen === Screen.PROFILE || screen === Screen.USER_PROFILE) {
+      }
+      if (screen === Screen.TAG_DETAILS) { const tagNotes = notes.filter(n => n.tags.includes((selectedTag as string) || '')); return <Layout {...commonProps}><div className="bg-gray-50 dark:bg-black min-h-full transition-colors duration-300 pt-12"><div className="sticky top-0 z-10 bg-white/80 dark:bg-black/80 backdrop-blur-md p-4 flex items-center gap-3 border-b border-gray-100 dark:border-zinc-800"><button onClick={() => setScreen(Screen.DISCOVER)} className="dark:text-white"><ArrowLeft /></button><div><h2 className="font-bold text-lg dark:text-white">{selectedTag}</h2><p className="text-xs text-gray-500">{tagNotes.length} {t.postsWith}</p></div></div><div className="p-4 space-y-4 pb-24">{tagNotes.map(note => (<NoteCard key={note.id} note={note} onLike={handleLike} onComment={handleComment} onUserClick={handleUserClick} onTagClick={handleTagClick} />))}</div></div></Layout> }
+      if (screen === Screen.NOTIFICATIONS) { return <Layout {...commonProps}><div className="bg-gray-50 dark:bg-black min-h-full transition-colors duration-300 pt-14"><PullRefreshWrapper onRefresh={handleRefresh} isDark={darkMode}><div className="p-4 pb-24"><div className="flex justify-between items-center mb-6"><h2 className="text-3xl font-bold dark:text-white tracking-tight">{t.activity}</h2><button className="text-xs font-bold text-gray-400 hover:text-black dark:hover:text-white" onClick={() => setNotifications(notifications.map(n => ({ ...n, read: true })))}>Mark all read</button></div><div className="space-y-4">{notifications.map(notif => (<div key={notif.id} onClick={() => handleUserClick(notif.fromUser.id)} className={`flex gap-4 items-center p-4 rounded-2xl shadow-sm cursor-pointer border border-gray-50 dark:border-zinc-800 relative overflow-hidden transition-all active:scale-98 ${!notif.read ? 'bg-blue-50 dark:bg-blue-900/10' : 'bg-white dark:bg-zinc-900'}`}>{!notif.read && <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500"></div>}<div className="p-3 rounded-full shrink-0 bg-transparent border border-gray-200 dark:border-zinc-800 text-black dark:text-white">{notif.type === 'LIKE' ? <Heart size={18} fill="currentColor"/> : <UserPlus size={18} />}</div><div className="flex-1"><p className="text-sm dark:text-white leading-snug"><span className="font-bold">{notif.fromUser.displayName}</span>{notif.type === 'LIKE' ? ` ${t.liked}` : ` ${t.startedFollowing}`}</p><p className="text-xs text-gray-400 mt-1 font-medium">Just now</p></div>{notif.type === 'FOLLOW' && (<button className="px-3 py-1 bg-black dark:bg-white text-white dark:text-black text-xs font-bold rounded-full">Follow</button>)}</div>))}{notifications.length === 0 && (<div className="text-center py-10 text-gray-400"><Bell size={48} className="mx-auto mb-4 opacity-20" /><p>No new activity.</p></div>)}</div></div></PullRefreshWrapper></div></Layout> }
+      if (screen === Screen.PROFILE || screen === Screen.USER_PROFILE) {
         const targetUser = screen === Screen.PROFILE ? currentUser : users.find(u => u.id === viewingUserId);
         if (!targetUser) return null; 
-
         const isSelf = screen === Screen.PROFILE || (currentUser && targetUser.id === currentUser.id);
         const isFollowing = currentUser?.followingIds.includes(targetUser.id);
-        
-        const displayedNotes = profileActiveTab === 'NOTES' 
-            ? notes.filter(n => n.userId === targetUser.id)
-            : notes.filter(n => isSelf ? n.isLikedByCurrentUser : n.likes > 50); 
-
-        return (
-          <Layout {...commonProps}>
-             <div className="bg-white dark:bg-black min-h-full pb-20 transition-colors duration-300">
-                <PullRefreshWrapper onRefresh={handleRefresh} isDark={darkMode}>
-                    {/* Cover Image */}
-                    <div className="relative h-48 bg-gray-900 overflow-hidden">
-                        <img src={targetUser.coverUrl} className="w-full h-full object-cover opacity-80 hover:opacity-100 transition-opacity duration-500" alt="cover"/>
-                        <div className="absolute top-12 left-4 z-10">
-                            {!isSelf && (
-                                <button onClick={() => setScreen(Screen.FEED)} className="p-2 bg-white/20 backdrop-blur text-white rounded-full hover:bg-white/30 transition-colors">
-                                    <ArrowLeft size={20} />
-                                </button>
-                            )}
-                        </div>
-                        <div className="absolute top-12 right-4 z-10 flex gap-2">
-                                {isSelf && (
-                                    <button 
-                                        onClick={() => setScreen(Screen.SETTINGS)}
-                                        className="p-2 bg-white/20 backdrop-blur text-white rounded-full hover:bg-white/30 transition-colors"
-                                    >
-                                        <Settings size={20} />
-                                    </button>
-                                )}
-                        </div>
-                    </div>
-
-                    <div className="relative px-4 -mt-12 mb-4">
-                        <button onClick={() => setPreviewImage(targetUser.avatarUrl)} className="relative">
-                            <img src={targetUser.avatarUrl} className="w-24 h-24 rounded-full border-4 border-white dark:border-black bg-white object-cover shadow-lg" alt="" />
-                        </button>
-                    </div>
-
-                    <div className="px-4 pb-6">
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <h2 className="text-2xl font-bold flex items-center gap-1 dark:text-white tracking-tight">
-                                {targetUser.displayName}
-                                {targetUser.badges.length > 0 && <Sparkles size={16} className="text-yellow-500 fill-yellow-500" />}
-                                </h2>
-                                <p className="text-gray-500 text-sm font-medium">@{targetUser.username}</p>
-                            </div>
-
-                            {/* Button moved here for alignment */}
-                            {!isSelf ? (
-                            <button 
-                                onClick={() => handleFollowToggle(targetUser.id)}
-                                className={`px-6 py-2.5 rounded-full font-bold text-sm transition-all active:scale-95 ${isFollowing ? 'bg-gray-100 dark:bg-zinc-800 text-black dark:text-white' : 'bg-black dark:bg-white dark:text-black text-white shadow-lg'}`}
-                            >
-                                {isFollowing ? t.unfollow : t.follow}
-                            </button>
-                            ) : (
-                            <button 
-                                onClick={openEditProfile} 
-                                className="px-6 py-2.5 bg-gray-100 dark:bg-zinc-800 rounded-full font-bold text-sm dark:text-white transition-colors hover:bg-gray-200 dark:hover:bg-zinc-700"
-                            >
-                                {t.editProfile}
-                            </button>
-                            )}
-                        </div>
-                    
-                        <p className="mt-4 text-base dark:text-gray-200 leading-relaxed max-w-md">{targetUser.bio}</p>
-                    
-                        <div className="flex gap-6 mt-6 text-sm font-bold dark:text-white border-b border-gray-100 dark:border-zinc-800 pb-6">
-                            <button onClick={() => { setFollowListType('FOLLOWERS'); setScreen(Screen.FOLLOW_LIST); }} className="hover:opacity-70 transition-opacity">
-                                {targetUser.followers} <span className="font-medium text-gray-500">{t.followers}</span>
-                            </button>
-                            <button onClick={() => { setFollowListType('FOLLOWING'); setScreen(Screen.FOLLOW_LIST); }} className="hover:opacity-70 transition-opacity">
-                                {targetUser.following} <span className="font-medium text-gray-500">{t.following}</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Tabs */}
-                    <div className="flex sticky top-0 bg-white dark:bg-black z-10">
-                        <button 
-                            onClick={() => setProfileActiveTab('NOTES')}
-                            className={`flex-1 py-4 text-sm font-bold border-b-2 transition-all ${profileActiveTab === 'NOTES' ? 'border-black dark:border-white dark:text-white' : 'border-gray-100 dark:border-zinc-800 text-gray-400'}`}
-                        >
-                            {t.notes}
-                        </button>
-                        <button 
-                            onClick={() => setProfileActiveTab('LIKES')}
-                            className={`flex-1 py-4 text-sm font-bold border-b-2 transition-all ${profileActiveTab === 'LIKES' ? 'border-black dark:border-white dark:text-white' : 'border-gray-100 dark:border-zinc-800 text-gray-400'}`}
-                        >
-                            {t.likes}
-                        </button>
-                    </div>
-
-                    <div className="p-4 space-y-4 bg-gray-50 dark:bg-zinc-900/50 min-h-[300px]">
-                    {displayedNotes.map(note => (
-                        <NoteCard 
-                            key={note.id} 
-                            note={note} 
-                            onLike={handleLike} 
-                            onComment={handleComment}
-                            onUserClick={handleUserClick}
-                            onTagClick={handleTagClick}
-                        />
-                    ))}
-                    </div>
-                </PullRefreshWrapper>
-             </div>
-          </Layout>
-        );
-    }
-
-    if (screen === Screen.FOLLOW_LIST) {
-        const list = followListType === 'FOLLOWERS' ? users : users.slice(0, 2); // Simplification for demo logic
-        return (
-            <Layout {...commonProps}>
-                <div className="bg-white dark:bg-black min-h-full p-4 transition-colors duration-300 pt-14">
-                    <div className="flex items-center gap-4 mb-6">
-                        <button onClick={() => setScreen(Screen.PROFILE)} className="dark:text-white"><ArrowLeft /></button>
-                        <h2 className="text-xl font-bold dark:text-white">{followListType === 'FOLLOWERS' ? t.followers : t.following}</h2>
-                    </div>
-                    <div className="space-y-4">
-                        {list.map(u => {
-                             const isFollowing = currentUser?.followingIds.includes(u.id);
-                             return (
-                             <div key={u.id} className="flex items-center justify-between p-2">
-                                 <div className="flex items-center gap-3" onClick={() => handleUserClick(u.id)}>
-                                     <img src={u.avatarUrl} className="w-12 h-12 rounded-full object-cover shadow-sm" />
-                                     <div>
-                                         <p className="font-bold dark:text-white">{u.displayName}</p>
-                                         <p className="text-gray-500 text-sm">@{u.username}</p>
-                                     </div>
-                                 </div>
-                                 {currentUser && u.id !== currentUser.id && (
-                                     <button 
-                                        onClick={() => handleFollowToggle(u.id)}
-                                        className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${isFollowing ? 'bg-gray-100 dark:bg-zinc-800 text-black dark:text-white' : 'bg-black dark:bg-white text-white dark:text-black'}`}
-                                     >
-                                         {isFollowing ? t.unfollow : t.follow}
-                                     </button>
-                                 )}
-                             </div>
-                        )})}
-                    </div>
-                </div>
-            </Layout>
-        )
-    }
-
-    return null;
-  };
+        const displayedNotes = profileActiveTab === 'NOTES' ? notes.filter(n => n.userId === targetUser.id) : notes.filter(n => isSelf ? n.isLikedByCurrentUser : n.likes > 50); 
+        return <Layout {...commonProps}><div className="bg-white dark:bg-black min-h-full pb-20 transition-colors duration-300"><PullRefreshWrapper onRefresh={handleRefresh} isDark={darkMode}><div className="relative h-48 bg-gray-900 overflow-hidden"><img src={targetUser.coverUrl} className="w-full h-full object-cover opacity-80 hover:opacity-100 transition-opacity duration-500" alt="cover"/><div className="absolute top-12 left-4 z-10">{!isSelf && (<button onClick={() => setScreen(Screen.FEED)} className="p-2 bg-white/20 backdrop-blur text-white rounded-full hover:bg-white/30 transition-colors"><ArrowLeft size={20} /></button>)}</div><div className="absolute top-12 right-4 z-10 flex gap-2">{isSelf && (<button onClick={() => setScreen(Screen.SETTINGS)} className="p-2 bg-white/20 backdrop-blur text-white rounded-full hover:bg-white/30 transition-colors"><Settings size={20} /></button>)}</div></div><div className="relative px-4 -mt-12 mb-4"><button onClick={() => setPreviewImage(targetUser.avatarUrl)} className="relative"><img src={targetUser.avatarUrl} className="w-24 h-24 rounded-full border-4 border-white dark:border-black bg-white object-cover shadow-lg" alt="" /></button></div><div className="px-4 pb-6"><div className="flex justify-between items-start"><div><h2 className="text-2xl font-bold flex items-center gap-1 dark:text-white tracking-tight">{targetUser.displayName}{targetUser.badges.length > 0 && <Sparkles size={16} className="text-yellow-500 fill-yellow-500" />}</h2><p className="text-gray-500 text-sm font-medium">@{targetUser.username}</p></div>{!isSelf ? (<button onClick={() => handleFollowToggle(targetUser.id)} className={`px-6 py-2.5 rounded-full font-bold text-sm transition-all active:scale-95 ${isFollowing ? 'bg-gray-100 dark:bg-zinc-800 text-black dark:text-white' : 'bg-black dark:bg-white dark:text-black text-white shadow-lg'}`}>{isFollowing ? t.unfollow : t.follow}</button>) : (<button onClick={openEditProfile} className="px-6 py-2.5 bg-gray-100 dark:bg-zinc-800 rounded-full font-bold text-sm dark:text-white transition-colors hover:bg-gray-200 dark:hover:bg-zinc-700">{t.editProfile}</button>)}</div><p className="mt-4 text-base dark:text-gray-200 leading-relaxed max-w-md">{targetUser.bio}</p><div className="flex gap-6 mt-6 text-sm font-bold dark:text-white border-b border-gray-100 dark:border-zinc-800 pb-6"><button onClick={() => { setFollowListType('FOLLOWERS'); setScreen(Screen.FOLLOW_LIST); }} className="hover:opacity-70 transition-opacity">{targetUser.followers} <span className="font-medium text-gray-500">{t.followers}</span></button><button onClick={() => { setFollowListType('FOLLOWING'); setScreen(Screen.FOLLOW_LIST); }} className="hover:opacity-70 transition-opacity">{targetUser.following} <span className="font-medium text-gray-500">{t.following}</span></button></div></div><div className="flex sticky top-0 bg-white dark:bg-black z-10"><button onClick={() => setProfileActiveTab('NOTES')} className={`flex-1 py-4 text-sm font-bold border-b-2 transition-all ${profileActiveTab === 'NOTES' ? 'border-black dark:border-white dark:text-white' : 'border-gray-100 dark:border-zinc-800 text-gray-400'}`}>{t.notes}</button><button onClick={() => setProfileActiveTab('LIKES')} className={`flex-1 py-4 text-sm font-bold border-b-2 transition-all ${profileActiveTab === 'LIKES' ? 'border-black dark:border-white dark:text-white' : 'border-gray-100 dark:border-zinc-800 text-gray-400'}`}>{t.likes}</button></div><div className="p-4 space-y-4 bg-gray-50 dark:bg-zinc-900/50 min-h-[300px]">{displayedNotes.map(note => (<NoteCard key={note.id} note={note} onLike={handleLike} onComment={handleComment} onUserClick={handleUserClick} onTagClick={handleTagClick} />))}</div></PullRefreshWrapper></div></Layout>
+      }
+      if (screen === Screen.FOLLOW_LIST) {
+         const list = followListType === 'FOLLOWERS' ? users : users; 
+         return <Layout {...commonProps}><div className="bg-white dark:bg-black min-h-full p-4 transition-colors duration-300 pt-14"><div className="flex items-center gap-4 mb-6"><button onClick={() => setScreen(Screen.PROFILE)} className="dark:text-white"><ArrowLeft /></button><h2 className="text-xl font-bold dark:text-white">{followListType === 'FOLLOWERS' ? t.followers : t.following}</h2></div><div className="space-y-4">{list.map(u => { const isFollowing = currentUser?.followingIds.includes(u.id); return (<div key={u.id} className="flex items-center justify-between p-2"><div className="flex items-center gap-3" onClick={() => handleUserClick(u.id)}><img src={u.avatarUrl} className="w-12 h-12 rounded-full object-cover shadow-sm" /><div><p className="font-bold dark:text-white">{u.displayName}</p><p className="text-gray-500 text-sm">@{u.username}</p></div></div>{currentUser && u.id !== currentUser.id && (<button onClick={() => handleFollowToggle(u.id)} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${isFollowing ? 'bg-gray-100 dark:bg-zinc-800 text-black dark:text-white' : 'bg-black dark:bg-white text-white dark:text-black'}`}>{isFollowing ? t.unfollow : t.follow}</button>)}</div>)})}</div></div></Layout>
+      }
+      return null;
+  }
 
   return (
     <div className="h-full w-full bg-gray-200 dark:bg-gray-900 flex justify-center font-sans">
-      {/* Responsive Container: Full width on mobile, max-w-xl on tablet/desktop (increased width for tablet) */}
       <div className="w-full md:max-w-xl lg:max-w-2xl h-full md:h-[95dvh] md:max-h-[1200px] bg-white dark:bg-black shadow-2xl relative overflow-hidden md:rounded-[2.5rem] md:my-auto md:border-4 border-black dark:border-zinc-800">
-        
-        {/* Dynamic Island Notification */}
         <DynamicIsland message={toast.message} type={toast.type} visible={toast.visible} icon={toast.icon} />
-
         {renderContent()}
-
-        {/* Comment Modal Overlay */}
-        {activeCommentNoteId && currentUser && (
-            <CommentsModal 
-                note={notes.find(n => n.id === activeCommentNoteId)!} 
-                currentUser={currentUser}
-                users={users}
-                onClose={() => setActiveCommentNoteId(null)}
-                onSubmitComment={submitComment}
-                onLikeComment={handleLikeComment}
-                t={t}
-            />
-        )}
-
-        {/* Edit Profile Modal Overlay */}
+        {activeCommentNoteId && currentUser && <CommentsModal note={notes.find(n => n.id === activeCommentNoteId)!} currentUser={currentUser} users={users} onClose={() => setActiveCommentNoteId(null)} onSubmitComment={submitComment} onLikeComment={handleLikeComment} t={t} />}
         {isEditingProfile && (
             <div className="absolute inset-0 bg-white dark:bg-black z-[60] animate-slide-up flex flex-col pt-12">
-                <div className="flex justify-between items-center p-4 border-b border-gray-100 dark:border-zinc-800">
-                    <button onClick={() => setIsEditingProfile(false)} className="dark:text-white">{t.cancel}</button>
-                    <h2 className="font-bold text-lg dark:text-white">{t.editProfile}</h2>
-                    <button onClick={saveProfile} className="text-black dark:text-white font-bold">{t.save}</button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-6 space-y-8">
-                    <div className="flex flex-col items-center gap-4">
-                         {/* Image Uploads with File Input */}
-                         <div className="relative">
-                            <img src={editForm.avatarUrl} className="w-28 h-28 rounded-full object-cover border-4 border-gray-100 dark:border-zinc-800" />
-                            <label className="absolute bottom-0 right-0 bg-black text-white p-2 rounded-full cursor-pointer shadow-lg hover:scale-105 transition-transform">
-                                <Camera size={16} />
-                                <input type="file" accept="image/*" className="hidden" onChange={e => handleFileChange(e, 'avatarUrl')} />
-                            </label>
-                         </div>
-                         
-                         <div className="w-full">
-                             <label className="block text-xs font-bold text-gray-500 uppercase mb-2 text-center">Cover Image</label>
-                             <div className="relative h-32 w-full rounded-xl overflow-hidden bg-gray-100 dark:bg-zinc-900">
-                                 <img src={editForm.coverUrl} className="w-full h-full object-cover opacity-70" />
-                                 <label className="absolute inset-0 flex items-center justify-center cursor-pointer hover:bg-black/10 transition-colors">
-                                     <div className="bg-black/50 text-white px-4 py-2 rounded-full flex items-center gap-2 text-sm backdrop-blur-md">
-                                         <ImageIcon size={16} /> Change Cover
-                                     </div>
-                                     <input type="file" accept="image/*" className="hidden" onChange={e => handleFileChange(e, 'coverUrl')} />
-                                 </label>
-                             </div>
-                         </div>
-                    </div>
-                    
-                    <div className="space-y-6">
-                        <div className="space-y-2">
-                            <label className="text-sm font-bold text-gray-500">{t.name}</label>
-                            <input 
-                               value={editForm.displayName} 
-                               onChange={e => setEditForm({...editForm, displayName: e.target.value})}
-                               className="w-full border-b border-gray-200 dark:border-zinc-800 py-3 focus:outline-none bg-transparent dark:text-white text-lg"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-bold text-gray-500 flex justify-between">
-                                {t.username}
-                                {currentUser?.lastUsernameChange && Date.now() - currentUser.lastUsernameChange < 604800000 && (
-                                    <span className="text-red-400 text-xs font-normal">Changed this week</span>
-                                )}
-                            </label>
-                             <div className="flex items-center border-b border-gray-200 dark:border-zinc-800 dark:text-white">
-                                <span className="text-gray-400 mr-1 font-bold">@</span>
-                                <input 
-                                    disabled // Mock logic: Assuming cooldown is active for demo
-                                    value={currentUser?.username} 
-                                    className="w-full py-3 focus:outline-none bg-transparent opacity-50"
-                                />
-                             </div>
-                             <p className="text-xs text-gray-400">You can change your username once every 7 days.</p>
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-bold text-gray-500 flex justify-between">
-                                {t.bio}
-                                <span className={`${editForm.bio.length > 180 ? 'text-red-500' : 'text-gray-400'}`}>{editForm.bio.length}/180</span>
-                            </label>
-                            <textarea 
-                               value={editForm.bio} 
-                               onChange={e => e.target.value.length <= 180 && setEditForm({...editForm, bio: e.target.value})}
-                               className="w-full border-b border-gray-200 dark:border-zinc-800 py-2 focus:outline-none bg-transparent resize-none dark:text-white h-24 text-base leading-relaxed"
-                            />
-                        </div>
-                    </div>
-                </div>
+                <div className="flex justify-between items-center p-4 border-b border-gray-100 dark:border-zinc-800"><button onClick={() => setIsEditingProfile(false)} className="dark:text-white">{t.cancel}</button><h2 className="font-bold text-lg dark:text-white">{t.editProfile}</h2><button onClick={saveProfile} className="text-black dark:text-white font-bold">{t.save}</button></div>
+                <div className="flex-1 overflow-y-auto p-6 space-y-8"><div className="flex flex-col items-center gap-4"><div className="relative"><img src={editForm.avatarUrl} className="w-28 h-28 rounded-full object-cover border-4 border-gray-100 dark:border-zinc-800" /><label className="absolute bottom-0 right-0 bg-black text-white p-2 rounded-full cursor-pointer shadow-lg hover:scale-105 transition-transform"><Camera size={16} /><input type="file" accept="image/*" className="hidden" onChange={e => handleFileChange(e, 'avatarUrl')} /></label></div><div className="w-full"><label className="block text-xs font-bold text-gray-500 uppercase mb-2 text-center">Cover Image</label><div className="relative h-32 w-full rounded-xl overflow-hidden bg-gray-100 dark:bg-zinc-900"><img src={editForm.coverUrl} className="w-full h-full object-cover opacity-70" /><label className="absolute inset-0 flex items-center justify-center cursor-pointer hover:bg-black/10 transition-colors"><div className="bg-black/50 text-white px-4 py-2 rounded-full flex items-center gap-2 text-sm backdrop-blur-md"><ImageIcon size={16} /> Change Cover</div><input type="file" accept="image/*" className="hidden" onChange={e => handleFileChange(e, 'coverUrl')} /></label></div></div></div><div className="space-y-6"><div className="space-y-2"><label className="text-sm font-bold text-gray-500">{t.name}</label><input value={editForm.displayName} onChange={e => setEditForm({...editForm, displayName: e.target.value})} className="w-full border-b border-gray-200 dark:border-zinc-800 py-3 focus:outline-none bg-transparent dark:text-white text-lg"/></div><div className="space-y-2"><label className="text-sm font-bold text-gray-500 flex justify-between">{t.username}</label><div className="flex items-center border-b border-gray-200 dark:border-zinc-800 dark:text-white"><span className="text-gray-400 mr-1 font-bold">@</span><input disabled value={currentUser?.username} className="w-full py-3 focus:outline-none bg-transparent opacity-50"/></div></div><div className="space-y-2"><label className="text-sm font-bold text-gray-500 flex justify-between">{t.bio}<span className={`${editForm.bio.length > 180 ? 'text-red-500' : 'text-gray-400'}`}>{editForm.bio.length}/180</span></label><textarea value={editForm.bio} onChange={e => e.target.value.length <= 180 && setEditForm({...editForm, bio: e.target.value})} className="w-full border-b border-gray-200 dark:border-zinc-800 py-2 focus:outline-none bg-transparent resize-none dark:text-white h-24 text-base leading-relaxed"/></div></div></div>
             </div>
         )}
-
-        {/* Image Preview Lightbox */}
-        {previewImage && (
-            <div 
-                className="absolute inset-0 z-[70] bg-black/95 backdrop-blur-xl flex items-center justify-center animate-fade-in"
-                onClick={() => setPreviewImage(null)}
-            >
-                <img src={previewImage} className="w-full max-h-[80vh] object-contain" />
-                <button className="absolute top-8 right-6 text-white bg-white/20 rounded-full p-2 backdrop-blur">
-                    <X />
-                </button>
-            </div>
-        )}
-
+        {previewImage && (<div className="absolute inset-0 z-[70] bg-black/95 backdrop-blur-xl flex items-center justify-center animate-fade-in" onClick={() => setPreviewImage(null)}><img src={previewImage} className="w-full max-h-[80vh] object-contain" /><button className="absolute top-8 right-6 text-white bg-white/20 rounded-full p-2 backdrop-blur"><X /></button></div>)}
       </div>
     </div>
   );

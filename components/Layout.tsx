@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Home, Search, PlusSquare, Bell, User } from 'lucide-react';
 import { Screen } from '../types';
@@ -40,17 +39,16 @@ const Layout: React.FC<LayoutProps> = ({ children, currentScreen, onNavigate, un
 
   return (
     <div className="flex flex-col h-full w-full mx-auto bg-white dark:bg-black shadow-2xl relative overflow-hidden transition-colors duration-300">
-      <main className="flex-1 overflow-y-auto no-scrollbar relative flex flex-col">
+      <main className="flex-1 overflow-y-auto no-scrollbar relative flex flex-col bg-white dark:bg-black">
         {children}
       </main>
 
-      {/* Sticky Bottom Nav - Static Flex Item for better stability on tablets/different viewports */}
+      {/* Sticky Bottom Nav */}
       <nav className="w-full h-16 flex-shrink-0 flex justify-around items-center z-50 pb-safe transition-colors duration-500
                       bg-black text-white dark:bg-white dark:text-black border-t border-gray-800 dark:border-gray-200">
         <NavItem screen={Screen.FEED} icon={Home} label={labels.home} />
         <NavItem screen={Screen.DISCOVER} icon={Search} label={labels.discover} />
         
-        {/* Floating Action Button for Create - Visual overlap handled by negative margin */}
         <button 
           onClick={() => onNavigate(Screen.CREATE)}
           className="relative -top-5 p-3.5 rounded-2xl shadow-lg active:scale-95 transition-all duration-300

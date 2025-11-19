@@ -27,7 +27,8 @@ export interface Comment {
   text: string;
   timestamp: number;
   likes: number;
-  isLikedByCurrentUser: boolean;
+  isLikedByCurrentUser: boolean; // Derived state for UI
+  likedBy?: string[]; // Persisted state in DB
   parentId?: string;
 }
 
@@ -65,7 +66,8 @@ export interface Note {
   type: NoteType;
   timestamp: number;
   likes: number;
-  isLikedByCurrentUser: boolean;
+  isLikedByCurrentUser: boolean; // Derived state for UI
+  likedBy?: string[]; // Persisted state in DB
   comments: Comment[];
   style: {
     font: FontStyle;
@@ -83,6 +85,7 @@ export interface Notification {
   commentId?: string;
   timestamp: number;
   read: boolean;
+  toUserId?: string; // Helper for DB queries
 }
 
 export enum Screen {
